@@ -1,0 +1,8 @@
+{% macro brand_logo() -%}
+  <img class="brand-logo" src="{{ static_url('img/logo.webp') }}" width="800" height="333" alt="venom_shadows site">
+{%- endmacro %}
+{% macro account_links() -%}
+  <form method="post" action="{{ url_for('auth.logout') }}">
+    <button type="submit" class="btn-link">Выйти</button>
+  </form>
+{%- endmacro %}

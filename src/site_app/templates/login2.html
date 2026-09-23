@@ -1,0 +1,24 @@
+{% extends "auth_base.html" %}
+
+{% block steps %}
+  <span class="step step--done">✓</span>
+  <span class="step-line step-line--done"></span>
+  <span class="step step--active">2</span>
+{% endblock %}
+
+{% block auth_title %}Второй фактор{% endblock %}
+{% block auth_hint %}Шаг 2 из 2 — дополнительный пароль{% endblock %}
+
+{% block auth_form %}
+  <form method="post" action="{{ url_for('auth.login2_submit') }}" class="auth-form" autocomplete="off">
+    <label class="field">
+      <span class="field__label">Второй пароль</span>
+      <input type="password" name="password" placeholder="Второй пароль" autofocus required autocomplete="one-time-code">
+    </label>
+    <button type="submit" class="btn btn--primary">Войти →</button>
+  </form>
+
+  <form method="post" action="{{ url_for('auth.logout') }}" class="auth-form__back">
+    <button type="submit" class="btn-link">← Назад ко входу</button>
+  </form>
+{% endblock %}

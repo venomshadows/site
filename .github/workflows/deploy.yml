@@ -1,0 +1,67 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Второй пуш в main не стартует SSH-деплой поверх ещё идущего:
+# fetch/merge и restart не должны пересекаться.
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install, pytest, shell syntax
+        run: |
+          pip install -e '.[dev,deploy]'
+          pytest -q
+          bash -n deploy/*.sh
+          shellcheck deploy/*.sh
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require VPS host key fingerprint
+        env:
+          VPS_SSH_FINGERPRINT: ${{ secrets.VPS_SSH_FINGERPRINT }}
+        run: |
+          if [[ -z "${VPS_SSH_FINGERPRINT}" ]]; then
+            echo "Секрет VPS_SSH_FINGERPRINT пуст. Без него SSH-деплой не проверяет ключ хоста (TOFU): подмена сервера останется незамеченной." >&2
+            echo "На сервере: ssh-keyscan -t ed25519 <IP> | ssh-keygen -lf -" >&2
+            echo "Запиши значение SHA256:... в секрет VPS_SSH_FINGERPRINT и запусти workflow снова." >&2
+            exit 1
+          fi
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          # Обязательный секрет. Проверка непустоты — шаг выше (через env):
+          # пустая строка в fingerprint отключает проверку host key.
+          # Получить на сервере: ssh-keyscan -t ed25519 <IP> | ssh-keygen -lf -
+          fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
+          # github.sha — коммит, который уже прошёл job test. На сервере
+          # остаёмся на ветке main (без detached HEAD) и отказываемся
+          # выкатывать что-либо ещё, даже если origin/main ушёл вперёд.
+          script: |
+            set -eu
+            cd /opt/site
+            git fetch --quiet origin main
+            git merge --ff-only ${{ github.sha }}
+            head=$(git rev-parse HEAD)
+            if [ "$head" != "${{ github.sha }}" ]; then
+              echo "HEAD ($head) не совпадает с проверенным коммитом ${{ github.sha }}" >&2
+              exit 1
+            fi
+            bash deploy/update.sh

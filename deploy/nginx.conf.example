@@ -1,0 +1,38 @@
+# nginx-конфиг для site.venomshadows.ru
+# Устанавливается автоматически скриптом deploy/setup-server.sh.
+# Вручную: положить как /etc/nginx/sites-available/site.conf,
+# симлинком в /etc/nginx/sites-enabled/, затем `nginx -t && systemctl reload nginx`.
+# SSL добавляет certbot (см. setup-server.sh) — он сам допишет server{} на 443
+# и редирект с 80.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name site.venomshadows.ru;
+
+    # Заголовки на уровне server. nginx отбрасывает add_header уровня server
+    # в тех location, где задан свой add_header. location /static/ ниже
+    # задаёт только expires — это не add_header, поэтому заголовки остаются
+    # и на статике. Certbot превращает этот же server{} в listen 443, так
+    # что заголовки попадают и на HTTPS.
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    # Браузеры игнорируют HSTS по обычному HTTP, поэтому заголовок
+    # начнёт действовать только после того, как certbot переведёт этот
+    # блок на listen 443.
+    add_header Strict-Transport-Security 'max-age=31536000' always;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /static/ {
+        alias /opt/site/src/site_app/static/;
+        expires 7d;
+    }
+}

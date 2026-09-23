@@ -1,0 +1,364 @@
+:root {
+  color-scheme: dark;
+
+  --bg: #070708;
+  --bg-panel: #0c1626;
+  --bg-panel-2: #101d33;
+  --fg: #e7f0ff;
+  --muted: #7b90b3;
+
+  --blue: #2f8bff;
+  --blue-bright: #5bb4ff;
+  --cyan: #35e0e0;
+
+  --ok: #22c88f;
+  --blocked: #ff4d6a;
+
+  --border: rgba(91, 180, 255, 0.18);
+  --border-bright: rgba(91, 180, 255, 0.45);
+
+  --radius: 10px;
+  --shadow-glow: 0 0 0 1px var(--border), 0 20px 60px -20px rgba(47, 139, 255, 0.35);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Roboto", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* ── Фон: чёрные грозовые тучи, дождь и красное свечение (как на логотипе) ── */
+/* Картинки --clouds и --rain задаёт base.html на <body> (с версией для сброса
+   кэша): адреса внутри самого CSS браузер кэширует отдельно и без версии. */
+.bg-clouds,
+.bg-rain,
+.bg-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Тучи — статичная текстура, медленно дрейфует. */
+.bg-clouds {
+  z-index: -4;
+  overflow: hidden;
+}
+
+.bg-clouds::before {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  background: var(--clouds) center / cover no-repeat;
+  opacity: 0.5;
+  animation: clouds-drift 140s ease-in-out infinite alternate;
+}
+
+/* Дождь — два слоя штрихов с разной крупностью и скоростью. Слой выше экрана
+   на размер плитки и сдвигается ровно на плитку вниз, поэтому цикл бесшовный;
+   анимируется только transform. */
+.bg-rain {
+  --tile: 512px;
+  z-index: -3;
+  overflow: hidden;
+}
+
+.bg-rain::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--tile) * -1);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--rain) 0 0 / var(--tile) var(--tile) repeat;
+  animation: rain-fall 0.9s linear infinite;
+}
+
+.bg-rain--far { --tile: 340px; opacity: 0.55; }
+.bg-rain--far::before { animation-duration: 1.5s; }
+.bg-rain--near { --tile: 620px; opacity: 0.9; }
+
+/* Красное свечение сверху справа (как красная половина эмблемы) и тёмная
+   виньетка по краям. */
+.bg-glow {
+  z-index: -2;
+  background:
+    radial-gradient(ellipse 55% 42% at 68% 6%, rgba(170, 12, 24, 0.22), transparent 70%),
+    radial-gradient(ellipse 70% 60% at 50% 45%, transparent 35%, rgba(0, 0, 0, 0.72) 100%);
+}
+
+@keyframes clouds-drift {
+  from { transform: translate3d(-3%, -1%, 0) scale(1); }
+  to   { transform: translate3d(3%, 1.5%, 0) scale(1.06); }
+}
+
+/* Сдвиг ровно на плитку по вертикали: рисунок дождя повторяется с периодом в
+   целую плитку по обеим осям, поэтому последний кадр совпадает с первым и на
+   стыке цикла нет скачка. */
+@keyframes rain-fall {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, var(--tile), 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-clouds::before,
+  .bg-rain::before { animation: none; }
+}
+
+/* ── Общие элементы ──────────────────────────────────────────────────── */
+h1 { font-weight: 500; letter-spacing: 0.01em; }
+
+a.topbar__brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+a.topbar__brand:hover { opacity: 0.8; }
+
+.btn {
+  padding: 0.7rem 1.4rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+
+.btn:active { transform: translateY(1px); }
+
+.btn--primary {
+  background: linear-gradient(135deg, var(--blue), var(--cyan) 160%);
+  color: #04101f;
+  box-shadow: 0 8px 24px -8px rgba(47, 139, 255, 0.6);
+}
+
+.btn--primary:hover { filter: brightness(1.08); }
+
+.btn-link {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-link:hover {
+  color: var(--blue-bright);
+  border-color: var(--border-bright);
+}
+
+.field {
+  display: block;
+  text-align: left;
+  margin-bottom: 1.1rem;
+}
+
+.field__label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+}
+
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(6, 16, 32, 0.7);
+  color: var(--fg);
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="text"]::placeholder,
+input[type="password"]::placeholder {
+  color: #45557a;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(47, 139, 255, 0.18);
+}
+
+/* ── Экран входа ─────────────────────────────────────────────────────── */
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-glow);
+  padding: 2.25rem 2rem 2rem;
+  text-align: center;
+}
+
+.auth-card__brand { margin-bottom: 1.75rem; }
+
+.auth-card__steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+}
+
+.step {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  background: rgba(6, 16, 32, 0.6);
+}
+
+.step--active {
+  color: #04101f;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  border-color: transparent;
+}
+
+.step--done {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.step-line {
+  width: 36px;
+  height: 1px;
+  background: var(--border);
+}
+
+.step-line--done { background: var(--ok); }
+
+.auth-card__title {
+  font-size: 1.3rem;
+  margin: 0 0 0.35rem;
+}
+
+.auth-card__hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 1.5rem;
+}
+
+.auth-form { text-align: left; }
+
+.auth-form__back { margin-top: 1.1rem; text-align: center; }
+
+.auth-error {
+  background: rgba(255, 77, 106, 0.12);
+  border: 1px solid rgba(255, 77, 106, 0.35);
+  color: var(--blocked);
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.auth-form .btn { width: 100%; margin-top: 0.25rem; }
+
+/* ── Верхняя панель основного сайта ─────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 0;
+}
+
+/* ── Главная страница ────────────────────────────────────────────────── */
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 4rem;
+}
+
+.panel {
+  background: linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-glow);
+  padding: 2.5rem;
+}
+
+.page__title { font-size: 1.6rem; margin: 0 0 0.4rem; }
+.page__lead { color: var(--muted); margin: 0 0 1.75rem; }
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+
+/* Логотип: исходная картинка 16:9 с тёмным фоном кадрируется до самого
+   знака с надписью, а края растворяются маской — так тёмные тучи картинки
+   сливаются с фоном сайта, и рамки не видно. */
+.brand-logo {
+  display: block;
+  aspect-ratio: 12 / 5;
+  height: 5rem;
+  width: auto;
+  object-fit: cover;
+  object-position: 50% 40%;
+  filter: brightness(1.12) contrast(1.08);
+  --logo-fade-x: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  --logo-fade-y: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent);
+  -webkit-mask-image: var(--logo-fade-x), var(--logo-fade-y);
+  -webkit-mask-composite: source-in;
+  mask-image: var(--logo-fade-x), var(--logo-fade-y);
+  mask-composite: intersect;
+}
+
+.auth-card__brand .brand-logo {
+  height: auto;
+  width: 100%;
+  max-width: 300px;
+  margin: -0.5rem auto 0;
+}
+
+@media (max-width: 480px) {
+  .auth-card { padding: 1.75rem 1.25rem; }
+  .panel { padding: 1.75rem 1.25rem; }
+  .brand-logo { height: 3.5rem; }
+  .topbar { gap: 0.75rem; flex-wrap: wrap; }
+}

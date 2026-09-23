@@ -1,0 +1,24 @@
+{% extends "auth_base.html" %}
+
+{% block steps %}
+  <span class="step step--active">1</span>
+  <span class="step-line"></span>
+  <span class="step">2</span>
+{% endblock %}
+
+{% block auth_title %}Вход в систему{% endblock %}
+{% block auth_hint %}Шаг 1 из 2 — логин и пароль{% endblock %}
+
+{% block auth_form %}
+  <form method="post" action="{{ url_for('auth.login_submit') }}" class="auth-form" autocomplete="off">
+    <label class="field">
+      <span class="field__label">Логин</span>
+      <input type="text" name="username" placeholder="Логин" autofocus required autocomplete="username">
+    </label>
+    <label class="field">
+      <span class="field__label">Пароль</span>
+      <input type="password" name="password" placeholder="Пароль" required autocomplete="current-password">
+    </label>
+    <button type="submit" class="btn btn--primary">Далее →</button>
+  </form>
+{% endblock %}

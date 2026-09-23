@@ -1,0 +1,43 @@
+[Unit]
+Description=site (gunicorn)
+
+[Service]
+# Пользовательский systemd-юнит (~/.config/systemd/user/) — запускается
+# от имени владельца автоматически, без User=/Group= и без root/sudo.
+WorkingDirectory=/opt/site
+Environment="PATH=/opt/site/.venv/bin"
+# Без буфера stdout: строки приложения сразу попадают в journalctl,
+# а не пачкой после заполнения буфера.
+Environment="PYTHONUNBUFFERED=1"
+# SECRET_KEY и прочие переменные — из /opt/site/.env.
+# Знак "-" перед путём = не считать ошибкой, если файла ещё нет (тогда
+# приложение само откажется стартовать с понятной ошибкой в логах).
+EnvironmentFile=-/opt/site/.env
+
+# Слушаем локальный TCP-порт — nginx проксирует на него (см. deploy/nginx.conf.example).
+#
+# --timeout 60: запас сверх стандартных 30с gunicorn на медленный запрос.
+#
+# ВАЖНО: ровно один процесс (--workers 1), с потоками (gthread) для
+# конкурентности. Счётчик неудачных попыток входа живёт в памяти процесса
+# (простой dict, без внешней БД). При нескольких процессах-воркерах у
+# каждого была бы своя копия счётчика, и лимит попыток фактически
+# умножался бы на число воркеров.
+#
+# create_app() со скобками: gunicorn вызывает фабрику и берёт её результат
+# как WSGI-приложение.
+ExecStart=/opt/site/.venv/bin/gunicorn \
+    --worker-class gthread \
+    --workers 1 \
+    --threads 4 \
+    --timeout 60 \
+    --bind 127.0.0.1:8000 \
+    --access-logfile - \
+    --error-logfile - \
+    site_app.webapp:create_app()
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
