@@ -44,3 +44,22 @@ $env:SESSION_COOKIE_SECURE = "0"
 пятиминутного окна. Счётчик общий для потоков одного процесса и сбрасывается
 при перезапуске; для общего лимита запускайте один процесс с потоками.
 `/healthz` остаётся публичным, главная страница открывается только после обоих шагов.
+
+## Деплой
+
+Сервер: Ubuntu 24.04, приложение в `/opt/site` от пользователя `site`
+(пользовательский systemd-юнит `site`, gunicorn на `127.0.0.1:8000` за nginx).
+
+- **Первичная настройка** — один раз от root: `bash deploy/setup-server.sh`
+  (скрипт идемпотентный, подробности — в его шапке).
+- **Автодеплой** — каждый push в `main`: GitHub Actions прогоняет тесты и
+  shellcheck, затем по SSH переводит сервер ровно на проверенный коммит и
+  запускает `deploy/update.sh` (зависимости, юниты, restart, проверка
+  `/healthz` и `/login`).
+- **Секреты Actions:** `VPS_HOST`, `VPS_USER`, `VPS_PORT`, `VPS_SSH_KEY`
+  (приватный ключ из `/root/site-secrets.txt`) и обязательный
+  `VPS_SSH_FINGERPRINT` (`ssh-keyscan -t ed25519 <IP> | ssh-keygen -lf -`).
+- **Смена пароля на сервере:** получить хеш командой
+  `sudo -u site /opt/site/.venv/bin/python3 /opt/site/deploy/gen_password_hash.py`,
+  вписать его в `/opt/site/.env` и перезапустить сервис:
+  `sudo -H -u site env XDG_RUNTIME_DIR=/run/user/$(id -u site) systemctl --user restart site`.
