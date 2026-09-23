@@ -362,5 +362,8 @@ echo "     VPS_HOST = ${SERVER_IP}"
 echo "     VPS_USER = ${APP_USER}"
 echo "     VPS_SSH_KEY = <приватный ключ из ${SECRETS_FILE}>"
 echo "     VPS_PORT = 22"
-echo "     VPS_SSH_FINGERPRINT = <ssh-keyscan -t ed25519 ${SERVER_IP} | ssh-keygen -lf -  → SHA256:...>"
+# Именно ECDSA: appleboy/ssh-action (Go x/crypto/ssh) при согласовании
+# выбирает ECDSA-ключ хоста раньше Ed25519, и отпечаток любого другого
+# типа даёт "host key fingerprint mismatch".
+echo "     VPS_SSH_FINGERPRINT = $(ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub | awk '{print $2}')"
 echo "===================================================================="

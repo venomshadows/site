@@ -58,7 +58,9 @@ $env:SESSION_COOKIE_SECURE = "0"
   `/healthz` и `/login`).
 - **Секреты Actions:** `VPS_HOST`, `VPS_USER`, `VPS_PORT`, `VPS_SSH_KEY`
   (приватный ключ из `/root/site-secrets.txt`) и обязательный
-  `VPS_SSH_FINGERPRINT` (`ssh-keyscan -t ed25519 <IP> | ssh-keygen -lf -`).
+  `VPS_SSH_FINGERPRINT` — отпечаток именно ECDSA-ключа хоста
+  (`ssh-keyscan -t ecdsa <IP> | ssh-keygen -lf -`; его же печатает `setup-server.sh`):
+  action на Go согласует ECDSA раньше Ed25519.
 - **Смена пароля на сервере:** получить хеш командой
   `sudo -u site /opt/site/.venv/bin/python3 /opt/site/deploy/gen_password_hash.py`,
   вписать его в `/opt/site/.env` и перезапустить сервис:

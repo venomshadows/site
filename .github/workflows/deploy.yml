@@ -36,7 +36,7 @@ jobs:
         run: |
           if [[ -z "${VPS_SSH_FINGERPRINT}" ]]; then
             echo "Секрет VPS_SSH_FINGERPRINT пуст. Без него SSH-деплой не проверяет ключ хоста (TOFU): подмена сервера останется незамеченной." >&2
-            echo "На сервере: ssh-keyscan -t ed25519 <IP> | ssh-keygen -lf -" >&2
+            echo "Отпечаток ECDSA-ключа сервера: ssh-keyscan -t ecdsa <IP> | ssh-keygen -lf -" >&2
             echo "Запиши значение SHA256:... в секрет VPS_SSH_FINGERPRINT и запусти workflow снова." >&2
             exit 1
           fi
@@ -49,7 +49,9 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           # Обязательный секрет. Проверка непустоты — шаг выше (через env):
           # пустая строка в fingerprint отключает проверку host key.
-          # Получить на сервере: ssh-keyscan -t ed25519 <IP> | ssh-keygen -lf -
+          # Нужен отпечаток именно ECDSA-ключа хоста (ssh-keyscan -t ecdsa <IP> |
+          # ssh-keygen -lf -): Go-клиент этого action согласует ECDSA раньше
+          # Ed25519, и отпечаток другого типа даёт host key fingerprint mismatch.
           fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
           # github.sha — коммит, который уже прошёл job test. На сервере
           # остаёмся на ветке main (без detached HEAD) и отказываемся
