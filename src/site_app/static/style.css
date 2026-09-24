@@ -18,6 +18,7 @@
   --border-bright: rgba(91, 180, 255, 0.45);
 
   --radius: 10px;
+  --page-gutter: clamp(1rem, 3vw, 3rem);
   --shadow-glow: 0 0 0 1px var(--border), 0 20px 60px -20px rgba(47, 139, 255, 0.35);
 }
 
@@ -308,16 +309,12 @@ input[type="number"]:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 1.5rem 1.5rem 0;
+  padding: 1.5rem var(--page-gutter) 0;
 }
 
-/* ── Главная страница ────────────────────────────────────────────────── */
+/* ── Страницы сайта на всю ширину ─────────────────────────────────────── */
 .page {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 3rem 1.5rem 4rem;
+  padding: 3rem var(--page-gutter) 4rem;
 }
 
 .panel {
@@ -372,7 +369,9 @@ input[type="number"]:focus {
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  /* Только горизонтальный зазор: вертикальный отступ уже даёт
+     .field margin-bottom, иначе в одну колонку (узкий экран) он удваивается. */
+  gap: 0 1rem;
 }
 
 .field--checkbox {
@@ -447,7 +446,7 @@ input[type="number"]:focus {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
   gap: 1.5rem;
   align-items: start;
   margin-bottom: 1.5rem;
@@ -461,7 +460,7 @@ input[type="number"]:focus {
   gap: 0.6rem;
 }
 
-.settings-section__hint { color: var(--muted); font-size: 0.82rem; margin: 0 0 1.4rem; }
+.settings-section__hint { color: var(--muted); font-size: 0.82rem; margin: 0 0 1.4rem; overflow-wrap: anywhere; }
 
 .settings-actions {
   display: flex;
@@ -470,12 +469,10 @@ input[type="number"]:focus {
   margin-bottom: 2rem;
 }
 
-.page:has(.settings-grid), .topbar:has(+ .page .settings-grid) { max-width: 1120px; }
 .settings-section { min-width: 0; }
-.settings-section__hint { overflow-wrap: anywhere; }
 .api-key-row { display: flex; gap: 0.6rem; margin-bottom: 1.1rem; }
 .api-key-row input { min-width: 0; font-family: "Roboto Mono", monospace; }
 @media (max-width: 860px) {
-  .settings-grid, .field-row { grid-template-columns: 1fr; }
+  .field-row { grid-template-columns: 1fr; }
   .api-key-row { flex-wrap: wrap; }
 }
