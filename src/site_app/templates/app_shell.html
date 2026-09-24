@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% from "_macros.html" import brand_logo, account_links %}
 {% block body %}
-  <header class="topbar">
+  <header class="{% block topbar_class %}topbar{% endblock %}">
+    {% block topbar_leading %}{% endblock %}
     <a href="{{ url_for('pages.index') }}" class="topbar__brand">{{ brand_logo() }}</a>
     <div class="topbar__actions">{{ account_links() }}</div>
   </header>
-  <main class="page">{% block content %}{% endblock %}</main>
+  {% block page_body %}
+    <main class="page">{% block content %}{% endblock %}</main>
+  {% endblock %}
 {% endblock %}

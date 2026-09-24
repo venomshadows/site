@@ -1,0 +1,13 @@
+{% extends 'brand_shell.html' %}
+{% from '_macros.html' import brand_error_panel %}
+{% block title %}{{ tabs[active_tab].title if brand else 'Brand недоступен' }} — venom_shadows site{% endblock %}
+{% block tab_content %}
+  <div class="panel">
+    {% if brand %}
+      <h1 class="page__title">{{ tabs[active_tab].title }}</h1>
+      <p class="page__lead">Раздел в разработке.</p>
+    {% else %}
+      {{ brand_error_panel(brands_error) }}
+    {% endif %}
+  </div>
+{% endblock %}

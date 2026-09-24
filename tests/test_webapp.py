@@ -19,7 +19,7 @@ def test_full_flow(client, first_factor):
     response = client.post("/login2", data={"password": "second-password"}, follow_redirects=True)
     assert response.status_code == 200
     assert response.request.path == "/"
-    assert "Добро пожаловать" in response.text
+    assert "Brand недоступен" in response.text
     assert "Выйти" in response.text
     with client.session_transaction() as session:
         assert session["stage"] == auth.STAGE_FULL

@@ -1,0 +1,56 @@
+{% extends 'app_shell.html' %}
+{% from '_macros.html' import account_links, engine_logo %}
+{% block topbar_class %}topbar topbar--wide{% endblock %}
+{% block topbar_leading %}
+    <button type="button" class="burger" aria-label="Меню: бренды" aria-expanded="false"
+            aria-controls="sidebar" data-sidebar-toggle>
+      <span class="burger__line"></span><span class="burger__line"></span><span class="burger__line"></span>
+    </button>
+{% endblock %}
+{% block page_body %}
+  <div class="sidebar-backdrop" data-sidebar-close hidden></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar" tabindex="-1">
+      <div class="sidebar__head">
+        <h2 class="sidebar__title">Бренды</h2>
+        <button type="button" class="sidebar__close" aria-label="Закрыть меню" data-sidebar-close>×</button>
+      </div>
+      {% if brands_error %}
+        <p class="hint hint--warn">{{ brands_error }}</p>
+      {% endif %}
+      <ul class="brand-list">
+        {% for b in brands %}
+          <li class="brand-list__item{{ ' brand-list__item--active' if brand and b.id == brand.id else '' }}">
+            <a href="{{ url_for('brands.brand_tab', brand_id=b.id, tab=default_tab) }}" class="brand-list__link">{{ b.name }}</a>
+            {#- Суммарная частота запросов бренда — та же цифра, что в скобках
+            у Brand; у бренда без загруженной статистики её нет (None). #}
+            {% if b.get('query_frequency_total') is not none %}
+              <span class="brand-list__freq" title="Суммарная частота запросов бренда">({{ b.query_frequency_total }})</span>
+            {% endif %}
+          </li>
+        {% else %}
+          {% if not brands_error %}
+            <li class="sidebar__empty">Бренды подтягиваются с Brand — там пока ничего не добавлено.</li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+      {#- На узком экране кнопки из шапки живут здесь (в шапке они скрыты). #}
+      <div class="sidebar__account">{{ account_links() }}</div>
+    </aside>
+
+    <main class="content">
+      {% if brand %}
+        <nav class="tabs">
+          {% for key, tab in tabs.items() %}
+            <a href="{{ url_for('brands.brand_tab', brand_id=brand.id, tab=key) }}"
+               class="tabs__link{{ ' tabs__link--active' if active_tab == key else '' }}"{% if active_tab == key %} aria-current="page"{% endif %}>
+              {% if tab.logo %}{{ engine_logo(tab.logo) }}{% endif %}{{ tab.title }}
+            </a>
+          {% endfor %}
+        </nav>
+      {% endif %}
+      {% block tab_content %}{% endblock %}
+    </main>
+  </div>
+{% endblock %}
