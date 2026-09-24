@@ -43,7 +43,13 @@ def normalize_domain(raw):
 
 
 def display_domain(domain):
-    return idna.decode(domain)
+    # Строка, попавшая в БД в обход normalize_domain (ручная правка, импорт),
+    # может не декодироваться: показываем её как есть, а не роняем страницу
+    # или весь /api/v1/sites 500-й.
+    try:
+        return idna.decode(domain)
+    except (idna.IDNAError, UnicodeError, ValueError):
+        return domain
 
 
 @dataclass(frozen=True)
