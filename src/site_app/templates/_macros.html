@@ -6,6 +6,7 @@
   <img class="brand-logo" src="{{ static_url('img/logo.webp') }}" width="800" height="333" alt="venom_shadows site">
 {%- endmacro %}
 {% macro account_links() -%}
+  <a href="{{ url_for('drops.drops_index') }}" class="btn-link">Дропы</a>
   <a href="{{ url_for('settings.settings_page') }}" class="btn-link">Настройки</a>
   <form method="post" action="{{ url_for('auth.logout') }}">
     {{ csrf_field() }}

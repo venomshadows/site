@@ -9,6 +9,7 @@ from site_app.auth_views import auth_bp
 from site_app import brand_client, csrf, db
 from site_app.brands_views import brands_bp, render_brand_page, DEFAULT_TAB
 from site_app.settings_views import settings_bp
+from site_app.drops_views import drops_bp
 from site_app.api_views import api_bp
 
 _REQUIRED_ENV = ("SECRET_KEY", "AUTH_USERNAME", "AUTH_PASSWORD_HASH", "AUTH_SECOND_PASSWORD_HASH")
@@ -91,6 +92,7 @@ def create_app(config: dict | None = None) -> Flask:
     csrf.init_app(app)
     db.init_db()
     app.register_blueprint(brands_bp)
+    app.register_blueprint(drops_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(auth_bp)

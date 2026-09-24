@@ -52,6 +52,26 @@ def init_db() -> None:
             UNIQUE(brand_id, engine, domain)
         )""")
         conn.execute("CREATE INDEX IF NOT EXISTS domains_list ON domains (brand_id, engine)")
+        conn.execute("""CREATE TABLE IF NOT EXISTS drops (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'new',
+            parent_id INTEGER REFERENCES drops(id),
+            brand_id INTEGER,
+            created_at TEXT NOT NULL,
+            registered_at TEXT,
+            UNIQUE(domain)
+        )""")
+        conn.execute('CREATE INDEX IF NOT EXISTS drops_brand ON drops (brand_id)')
+        conn.execute("""CREATE TABLE IF NOT EXISTS drop_brand_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            drop_id INTEGER NOT NULL REFERENCES drops(id),
+            brand_id INTEGER NOT NULL,
+            brand_name TEXT NOT NULL,
+            assigned_at TEXT NOT NULL,
+            removed_at TEXT
+        )""")
+        conn.execute('CREATE INDEX IF NOT EXISTS drop_brand_history_drop ON drop_brand_history (drop_id)')
         conn.execute(f"CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK (id = 1), {columns})")
         existing = {row["name"] for row in conn.execute("PRAGMA table_info(settings)")}
         for name, ddl in SETTINGS_COLUMNS.items():

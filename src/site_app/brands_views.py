@@ -1,7 +1,8 @@
 """Страницы бренда и общий контекст сайдбара и вкладок."""
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
-from site_app import brand_client, domains
+from flask import Blueprint, abort, redirect, render_template, request, url_for
+from site_app import brand_client, domains, drops
 from site_app.auth import login_required
+from site_app.domain_forms import add_from_form, bulk_from_form
 
 brands_bp = Blueprint('brands', __name__, url_prefix='/brands')
 
@@ -9,7 +10,7 @@ brands_bp = Blueprint('brands', __name__, url_prefix='/brands')
 TABS = {
     'yandex': {'title': 'Яндекс', 'logo': 'yandex', 'domains': True},
     'google': {'title': 'Google', 'logo': 'google', 'domains': True},
-    'drops': {'title': 'Дропы', 'logo': None, 'domains': False},
+    'drops': {'title': 'Дропы', 'logo': None, 'domains': True},
 }
 DEFAULT_TAB = next(iter(TABS))
 
@@ -34,13 +35,25 @@ def brand_tab(brand_id: int, tab: str):
         abort(404)
     extra = {}
     if TABS[tab]['domains']:
+        scope = _scope(brand_id, tab)
         sort, order = domains.sorting(request.args.get('sort'), request.args.get('order'))
-        extra = dict(domain_rows=domains.list_tree(brand_id, tab, sort, order),
-                     statuses=domains.STATUSES, sorts=domains.SORTS, sort=sort, order=order)
+        extra = dict(domain_rows=domains.list_tree(scope, sort, order),
+                     statuses=domains.STATUSES, sorts=domains.SORTS, sort=sort, order=order,
+                     show_brand_column=False, show_history=tab == 'drops',
+                     brand_actions=tab == 'drops', brand_select_on_add=False,
+                     add_url=url_for('brands.domains_add', brand_id=brand_id, engine=tab, sort=sort, order=order),
+                     bulk_url=url_for('brands.domains_bulk', brand_id=brand_id, engine=tab, sort=sort, order=order))
+        if tab == 'drops':
+            extra.update(history=drops.history_for([r['id'] for r in extra['domain_rows']]),
+                         assignable_brands=brands)
     return render_brand_page(
         'brand_tab.html', brands=brands, brands_error=brands_error,
         brand=brand, brand_id=brand_id, active_tab=tab, **extra,
     )
+
+
+def _scope(brand_id, engine):
+    return drops.brand_scope(brand_id) if engine == 'drops' else domains.brand_engine_scope(brand_id, engine)
 
 
 def _domain_destination(brand_id, engine):
@@ -54,10 +67,7 @@ def _domain_destination(brand_id, engine):
 @login_required
 def domains_add(brand_id, engine):
     destination = _domain_destination(brand_id, engine)
-    added, skipped = domains.add_domains(brand_id, engine, request.form.get('domains', ''))
-    flash(f'Добавлено доменов: {len(added)}.', 'success')
-    if skipped:
-        flash('Пропущено: ' + '; '.join(f'{value} — {reason}' for value, reason in skipped), 'error')
+    add_from_form(_scope(brand_id, engine))
     return redirect(destination)
 
 
@@ -65,18 +75,5 @@ def domains_add(brand_id, engine):
 @login_required
 def domains_bulk(brand_id, engine):
     destination = _domain_destination(brand_id, engine)
-    ids = request.form.getlist('ids')
-    try:
-        action = request.form.get('action')
-        if action == 'delete':
-            count = domains.delete_domains(brand_id, engine, ids)
-            flash(f'Удалено доменов: {count}.', 'success')
-        elif action == 'status':
-            count = domains.change_status(brand_id, engine, ids, request.form.get('status'),
-                                          request.form.get('parent_id'))
-            flash(f'Изменено доменов: {count}.', 'success')
-        else:
-            raise domains.DomainError('Неизвестное действие.')
-    except domains.DomainError as exc:
-        flash(str(exc), 'error')
+    bulk_from_form(_scope(brand_id, engine))
     return redirect(destination)

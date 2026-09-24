@@ -1,0 +1,21 @@
+{% extends 'app_shell.html' %}
+{% block title %}Дропы — venom_shadows site{% endblock %}
+{% block content %}
+  <div class="page-header"><div class="page-header__text"><h1 class="page__title">Дропы</h1></div></div>
+  {% for category, message in get_flashed_messages(with_categories=true) %}
+    <div class="result {{ 'result--ok' if category == 'success' else 'result--error' }}" role="status"><span>{{ message }}</span></div>
+  {% endfor %}
+  {% if brands_error %}<p class="hint hint--warn">{{ brands_error }}</p>{% endif %}
+  <form method="get" class="domain-sort">
+    <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="order" value="{{ order }}">
+    <label class="field">Бренд
+      <select name="brand">
+        <option value="all"{{ ' selected' if brand_filter == 'all' else '' }}>Все бренды</option>
+        <option value="none"{{ ' selected' if brand_filter == 'none' else '' }}>Без бренда</option>
+        {% for b in brands %}<option value="{{ b.id }}"{{ ' selected' if brand_filter == b.id else '' }}>{{ b.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn btn--secondary">Показать</button>
+  </form>
+  <section class="panel">{% include '_domains.html' %}</section>
+{% endblock %}

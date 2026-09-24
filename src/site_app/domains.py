@@ -1,5 +1,6 @@
 """Локальные списки доменов: нормализация, дерево и атомарные операции."""
 import re
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import idna
@@ -45,7 +46,32 @@ def display_domain(domain):
     return idna.decode(domain)
 
 
-def add_domains(brand_id, engine, text):
+@dataclass(frozen=True)
+class ListScope:
+    table: str
+    where_sql: str
+    where_params: tuple = ()
+    insert_columns: dict = field(default_factory=dict)
+    unique_where_sql: str | None = None
+    unique_where_params: tuple | None = None
+    glue_columns: tuple = ()
+
+    @property
+    def unique_sql(self):
+        return self.where_sql if self.unique_where_sql is None else self.unique_where_sql
+
+    @property
+    def unique_params(self):
+        return self.where_params if self.unique_where_params is None else self.unique_where_params
+
+
+def brand_engine_scope(brand_id, engine):
+    return ListScope(table='domains', where_sql='brand_id=? AND engine=?',
+                     where_params=(brand_id, engine),
+                     insert_columns={'brand_id': brand_id, 'engine': engine})
+
+
+def add_domains(scope, text, on_insert=None):
     """Разделяем ввод по пробелам, запятым и переносам строк вперемешку.
 
     Возвращаем добавленные канонические домены и пары (ввод, причина пропуска).
@@ -55,7 +81,7 @@ def add_domains(brand_id, engine, text):
         # Блокировка до чтения защищает предварительную проверку от гонки вставок.
         conn.execute('BEGIN IMMEDIATE')
         existing = {r['domain'] for r in conn.execute(
-            'SELECT domain FROM domains WHERE brand_id=? AND engine=?', (brand_id, engine))}
+            f'SELECT domain FROM {scope.table} WHERE {scope.unique_sql}', scope.unique_params)}
         for token in filter(None, re.split(r'[\s,]+', text)):
             try:
                 domain = normalize_domain(token)
@@ -70,9 +96,12 @@ def add_domains(brand_id, engine, text):
                 added.append(domain)
             seen.add(domain)
         now = datetime.now(timezone.utc).isoformat()
+        columns = [*scope.insert_columns.keys(), 'domain', 'created_at']
         conn.executemany(
-            'INSERT INTO domains (brand_id, engine, domain, created_at) VALUES (?, ?, ?, ?)',
-            [(brand_id, engine, domain, now) for domain in added])
+            f'INSERT INTO {scope.table} ({", ".join(columns)}) VALUES ({_marks(columns)})',
+            [(*scope.insert_columns.values(), domain, now) for domain in added])
+        if added and on_insert is not None:
+            on_insert(conn, added)
     return added, skipped
 
 
@@ -80,11 +109,11 @@ def sorting(sort=None, order=None):
     return (sort if sort in SORTS else 'created_at', order if order in {'asc', 'desc'} else 'desc')
 
 
-def list_tree(brand_id, engine, sort=None, order=None):
+def list_tree(scope, sort=None, order=None):
     sort, order = sorting(sort, order)
     with _connect() as conn:
         rows = [dict(r) for r in conn.execute(
-            'SELECT * FROM domains WHERE brand_id=? AND engine=?', (brand_id, engine))]
+            f'SELECT * FROM {scope.table} WHERE {scope.where_sql}', scope.where_params)]
     children = {}
     ranks = {status: rank for rank, status in enumerate(STATUSES)}
     for row in rows:
@@ -117,31 +146,33 @@ def would_cycle(parents, domain_id, parent_id):
     return False
 
 
-def _selected(conn, brand_id, engine, ids):
+def _selected(conn, scope, ids):
     # Некорректные и чужие id не влияют на остальные выбранные строки.
     valid = {int(value) for value in ids if str(value).isascii() and str(value).isdigit()
              and 0 < int(value) <= 9223372036854775807}
     if not valid:
         return []
     return [r['id'] for r in conn.execute(
-        f'SELECT id FROM domains WHERE brand_id=? AND engine=? AND id IN ({_marks(valid)})',
-        (brand_id, engine, *valid))]
+        f'SELECT id FROM {scope.table} WHERE {scope.where_sql} AND id IN ({_marks(valid)})',
+        (*scope.where_params, *valid))]
 
 
 def _marks(ids):
     return ','.join('?' for _ in ids)
 
 
-def change_status(brand_id, engine, ids, status, parent_id=None):
+def change_status(scope, ids, status, parent_id=None):
     if status not in STATUSES:
         raise DomainError('Неизвестный статус.')
     with _connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
-        selected = _selected(conn, brand_id, engine, ids)
+        selected = _selected(conn, scope, ids)
         parent = None
         if status == 'glued':
-            parents = {r['id']: r['parent_id'] for r in conn.execute(
-                'SELECT id, parent_id FROM domains WHERE brand_id=? AND engine=?', (brand_id, engine))}
+            columns = ', '.join(('id', 'parent_id', *scope.glue_columns))
+            all_rows = {r['id']: dict(r) for r in conn.execute(
+                f'SELECT {columns} FROM {scope.table} WHERE {scope.where_sql}', scope.where_params)}
+            parents = {item: row['parent_id'] for item, row in all_rows.items()}
             try:
                 parent = int(parent_id)
             except (ValueError, TypeError):
@@ -150,22 +181,29 @@ def change_status(brand_id, engine, ids, status, parent_id=None):
                 raise DomainError('Родитель должен принадлежать этому списку.')
             if parent in selected or any(would_cycle(parents, item, parent) for item in selected):
                 raise DomainError('Нельзя приклеить домен к себе, потомку или домену из выбранного набора.')
+            if scope.glue_columns and any(
+                tuple(all_rows[parent][c] for c in scope.glue_columns)
+                != tuple(all_rows[item][c] for c in scope.glue_columns) for item in selected
+            ):
+                raise DomainError('Нельзя приклеить домен к родителю из другого бренда.')
         if selected:
-            conn.execute(f'UPDATE domains SET status=?, parent_id=? WHERE id IN ({_marks(selected)}) '
-                         'AND brand_id=? AND engine=?',
-                         (status, parent, *selected, brand_id, engine))
+            conn.execute(f'UPDATE {scope.table} SET status=?, parent_id=? WHERE id IN ({_marks(selected)}) '
+                         f'AND {scope.where_sql}',
+                         (status, parent, *selected, *scope.where_params))
     return len(selected)
 
 
-def delete_domains(brand_id, engine, ids):
+def delete_domains(scope, ids, before_delete=None):
     with _connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
-        selected = _selected(conn, brand_id, engine, ids)
+        selected = _selected(conn, scope, ids)
         if selected:
             marks = _marks(selected)
-            conn.execute(f"""UPDATE domains SET parent_id=NULL, status='used'
-                WHERE parent_id IN ({marks}) AND id NOT IN ({marks}) AND brand_id=? AND engine=?""",
-                         (*selected, *selected, brand_id, engine))
-            conn.execute(f'DELETE FROM domains WHERE id IN ({marks}) AND brand_id=? AND engine=?',
-                         (*selected, brand_id, engine))
+            conn.execute(f"""UPDATE {scope.table} SET parent_id=NULL, status='used'
+                WHERE parent_id IN ({marks}) AND id NOT IN ({marks}) AND {scope.where_sql}""",
+                         (*selected, *selected, *scope.where_params))
+            if before_delete is not None:
+                before_delete(conn, selected)
+            conn.execute(f'DELETE FROM {scope.table} WHERE id IN ({marks}) AND {scope.where_sql}',
+                         (*selected, *scope.where_params))
     return len(selected)

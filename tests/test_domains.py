@@ -26,34 +26,34 @@ def test_invalid_domain(raw):
 
 
 def rows(brand=7, engine='yandex'):
-    return {r['domain']: r for r in d.list_tree(brand, engine)}
+    return {r['domain']: r for r in d.list_tree(d.brand_engine_scope(brand, engine))}
 
 
 @pytest.fixture
 def tree(app):
-    d.add_domains(7, 'yandex', 'a.ru b.ru c.ru d.ru e.ru')
+    d.add_domains(d.brand_engine_scope(7, 'yandex'), 'a.ru b.ru c.ru d.ru e.ru')
     ids = {name[0]: row['id'] for name, row in rows().items()}
-    d.change_status(7, 'yandex', [ids['b']], 'glued', ids['a'])
-    d.change_status(7, 'yandex', [ids['c']], 'glued', ids['b'])
-    d.change_status(7, 'yandex', [ids['d']], 'glued', ids['c'])
+    d.change_status(d.brand_engine_scope(7, 'yandex'), [ids['b']], 'glued', ids['a'])
+    d.change_status(d.brand_engine_scope(7, 'yandex'), [ids['c']], 'glued', ids['b'])
+    d.change_status(d.brand_engine_scope(7, 'yandex'), [ids['d']], 'glued', ids['c'])
     return ids
 
 
 def test_add_and_isolation(app):
-    d.add_domains(7, 'yandex', 'old.ru')
-    added, skipped = d.add_domains(7, 'yandex', 'one.ru, two.ru\nONE.RU https://old.ru/path мусор')
+    d.add_domains(d.brand_engine_scope(7, 'yandex'), 'old.ru')
+    added, skipped = d.add_domains(d.brand_engine_scope(7, 'yandex'), 'one.ru, two.ru\nONE.RU https://old.ru/path мусор')
     assert added == ['one.ru', 'two.ru']
     assert [reason for _, reason in skipped][:2] == ['дубликат в списке', 'уже есть в списке']
     assert skipped[2][1].startswith('некорректный домен:')
-    assert d.add_domains(7, 'google', 'one.ru')[0] == ['one.ru']
-    assert d.add_domains(8, 'yandex', 'one.ru')[0] == ['one.ru']
+    assert d.add_domains(d.brand_engine_scope(7, 'google'), 'one.ru')[0] == ['one.ru']
+    assert d.add_domains(d.brand_engine_scope(8, 'yandex'), 'one.ru')[0] == ['one.ru']
     row = rows()['one.ru']
     assert row['status'] == 'new' and row['registered_at'] is None
     assert row['created_at'].endswith('+00:00')
 
 
 def test_detach_preserves_children(tree):
-    assert d.change_status(7, 'yandex', [tree['b']], 'in_use') == 1
+    assert d.change_status(d.brand_engine_scope(7, 'yandex'), [tree['b']], 'in_use') == 1
     current = rows()
     assert current['b.ru']['parent_id'] is None
     assert current['b.ru']['status'] == 'in_use'
@@ -65,7 +65,7 @@ def test_detach_preserves_children(tree):
 def test_glue_rejected_atomically(tree, selected, parent):
     before = rows()
     with pytest.raises(d.DomainError):
-        d.change_status(7, 'yandex', [tree[x] for x in selected], 'glued', tree[parent])
+        d.change_status(d.brand_engine_scope(7, 'yandex'), [tree[x] for x in selected], 'glued', tree[parent])
     assert rows() == before
 
 
@@ -73,12 +73,12 @@ def test_glue_rejected_atomically(tree, selected, parent):
 def test_parent_required(tree, parent):
     before = rows()
     with pytest.raises(d.DomainError):
-        d.change_status(7, 'yandex', [tree['e']], 'glued', parent)
+        d.change_status(d.brand_engine_scope(7, 'yandex'), [tree['e']], 'glued', parent)
     assert rows() == before
 
 
 def test_delete_parent(tree):
-    assert d.delete_domains(7, 'yandex', [tree['a']]) == 1
+    assert d.delete_domains(d.brand_engine_scope(7, 'yandex'), [tree['a']]) == 1
     current = rows()
     assert 'a.ru' not in current
     assert current['b.ru']['status'] == 'used' and current['b.ru']['parent_id'] is None
@@ -87,7 +87,7 @@ def test_delete_parent(tree):
 
 
 def test_delete_parent_and_child(tree):
-    assert d.delete_domains(7, 'yandex', [tree['a'], tree['b']]) == 2
+    assert d.delete_domains(d.brand_engine_scope(7, 'yandex'), [tree['a'], tree['b']]) == 2
     current = rows()
     assert set(current) == {'c.ru', 'd.ru', 'e.ru'}
     assert current['c.ru']['status'] == 'used' and current['c.ru']['parent_id'] is None
@@ -97,30 +97,30 @@ def test_delete_parent_and_child(tree):
 @pytest.mark.parametrize('operation', ['status', 'delete', 'glued'])
 def test_foreign_ids_ignored(tree, operation):
     for brand, engine in [(8, 'yandex'), (7, 'google')]:
-        d.add_domains(brand, engine, 'a.ru b.ru')
+        d.add_domains(d.brand_engine_scope(brand, engine), 'a.ru b.ru')
     foreign = [*rows(8).values(), *rows(7, 'google').values()]
     ids = [r['id'] for r in foreign] + [tree['e'], 'bad', '999999999999999999999999999']
     if operation == 'delete':
-        assert d.delete_domains(7, 'yandex', ids) == 1
+        assert d.delete_domains(d.brand_engine_scope(7, 'yandex'), ids) == 1
     else:
-        assert d.change_status(7, 'yandex', ids, 'glued' if operation == 'glued' else 'used', tree['a']) == 1
+        assert d.change_status(d.brand_engine_scope(7, 'yandex'), ids, 'glued' if operation == 'glued' else 'used', tree['a']) == 1
     assert foreign == [*rows(8).values(), *rows(7, 'google').values()]
     with pytest.raises(d.DomainError):
-        d.change_status(7, 'yandex', [tree['a']], 'glued', foreign[0]['id'])
+        d.change_status(d.brand_engine_scope(7, 'yandex'), [tree['a']], 'glued', foreign[0]['id'])
 
 
 @pytest.mark.parametrize('brand, engine', [(8, 'yandex'), (7, 'google')])
 def test_change_status_scopes_update_without_selected_filter(tree, brand, engine):
     before = rows()
-    with patch.object(d, '_selected', return_value=[tree['b']]):
-        d.change_status(brand, engine, [tree['b']], 'used')
+    with patch.object(d, '_selected', autospec=True, return_value=[tree['b']]):
+        d.change_status(d.brand_engine_scope(brand, engine), [tree['b']], 'used')
     assert rows() == before
 
 
 @pytest.mark.parametrize('sort', d.SORTS)
 @pytest.mark.parametrize('order', ['asc', 'desc'])
 def test_sibling_sorting(app, sort, order):
-    d.add_domains(7, 'yandex', 'root.ru other.ru child.ru sibling.ru null.ru')
+    d.add_domains(d.brand_engine_scope(7, 'yandex'), 'root.ru other.ru child.ru sibling.ru null.ru')
     current = rows()
     ids = {name: r['id'] for name, r in current.items()}
     with db._connect() as conn:
@@ -133,7 +133,7 @@ def test_sibling_sorting(app, sort, order):
         ]:
             conn.execute('UPDATE domains SET created_at=?, status=?, registered_at=?, parent_id=? WHERE id=?',
                          (date, status, registered, parent, ids[name]))
-    result = d.list_tree(7, 'yandex', sort, order)
+    result = d.list_tree(d.brand_engine_scope(7, 'yandex'), sort, order)
     root_index = next(i for i, r in enumerate(result) if r['domain'] == 'root.ru')
     children = result[root_index + 1:root_index + 3]
     assert {r['domain'] for r in children} == {'child.ru', 'sibling.ru'}
@@ -156,7 +156,7 @@ def test_post_protection(client, csrf_post, suffix):
     assert csrf_post(path).location == '/login'
 
 
-@pytest.mark.parametrize('engine', ['drops', 'unknown'])
+@pytest.mark.parametrize('engine', ['unknown'])
 @pytest.mark.parametrize('suffix', ['', '/bulk'])
 def test_post_unknown_engine(client, login, csrf_post, engine, suffix):
     login()
@@ -210,7 +210,7 @@ def test_domain_tree_selection_markup(client, login, tree):
     login()
     with patch.object(brand_client, 'list_brands', return_value=([{'id': 7, 'name': 'Бренд'}], None)):
         page = client.get('/brands/7/yandex').text
-    for row in d.list_tree(7, 'yandex'):
+    for row in d.list_tree(d.brand_engine_scope(7, 'yandex')):
         modifier = ' domain-name--nested' if row['depth'] > 0 else ''
         assert f'class="domain-name{modifier}" style="--depth: {row["depth"]}"' in page
         assert f'name="ids" value="{row["id"]}"' in page
