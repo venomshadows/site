@@ -43,3 +43,12 @@
     {{ secret_field('API-ключ', field_name, has_value) }}
   </section>
 {%- endmacro %}
+
+{% macro engine_logo(source) -%}
+  <img class="engine-logo" src="{{ static_url('img/' ~ source ~ '.svg') }}" alt="" width="20" height="20">
+{%- endmacro %}
+
+{% macro brand_error_panel(reason) -%}
+  <h1 class="page__title">Brand недоступен</h1>
+  <p class="page__lead">{{ reason }}</p>
+{%- endmacro %}

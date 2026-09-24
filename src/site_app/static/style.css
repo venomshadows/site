@@ -476,3 +476,225 @@ input[type="number"]:focus {
   .field-row { grid-template-columns: 1fr; }
   .api-key-row { flex-wrap: wrap; }
 }
+
+/* Бренды: сайдбар и вкладки. */
+.layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+  max-width: none;
+  margin: 0;
+  padding: 2rem var(--page-gutter) 4rem;
+}
+
+.content { flex: 1; min-width: 0; }
+
+.sidebar {
+  /* Растёт вместе с экраном, но не бесконечно — длинные названия брендов
+     помещаются, не сжимая контент до нечитаемого. */
+  width: clamp(260px, 22vw, 400px);
+  flex-shrink: 0;
+  background: linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-glow);
+  padding: 1.5rem;
+}
+
+/* Бургер, кнопка «×» панели, блок «Настройки/Выйти» внутри сайдбара и
+   подложка — только для узкого экрана (см. @media в конце файла). */
+.burger,
+.sidebar__close,
+.sidebar__account,
+.sidebar-backdrop { display: none; }
+
+.sidebar__head { display: flex; align-items: center; justify-content: space-between; }
+
+.sidebar__title {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+.sidebar__empty {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0.5rem 0.2rem 1rem;
+}
+
+.brand-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.brand-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.brand-list__item:hover { background: rgba(91, 180, 255, 0.06); }
+.brand-list__item--active { background: rgba(47, 139, 255, 0.14); }
+
+.brand-list__link {
+  flex: 1;
+  padding: 0.55rem 0.7rem;
+  color: var(--fg);
+  text-decoration: none;
+  font-size: 0.92rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.brand-list__item--active .brand-list__link {
+  color: var(--blue-bright);
+  font-weight: 500;
+}
+
+.brand-list__freq {
+  flex-shrink: 0;
+  padding-right: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs__link {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tabs__link:hover { color: var(--fg); }
+
+.tabs__link--active {
+  color: var(--blue-bright);
+  border-color: var(--blue-bright);
+}
+
+/* Логотип поисковой системы перед названием вкладки (Яндекс/Google) — по
+   образцу sibling-проекта index-checker, 20px по высоте. .tabs__link — flex
+   с align-items: center, поэтому картинке не нужен vertical-align. */
+.engine-logo {
+  height: 20px;
+  width: 20px;
+  margin-right: 0.4rem;
+}
+
+/* ── Мобильная версия бренд-сайдбара и вкладок ────────────────────────────
+   До 860px список брендов уходит в выезжающую панель (бургер в шапке),
+   вкладки прокручиваются по горизонтали. */
+.tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tabs__link { white-space: nowrap; flex-shrink: 0; }
+
+@media (max-width: 860px) {
+  /* Полоса прокрутки вкладок скрыта только на телефоне (там листают
+     пальцем); на десктопе, если вкладки не влезли, полоса остаётся видимой. */
+  .tabs { scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  .topbar--wide { justify-content: flex-start; padding-left: var(--page-gutter); padding-right: var(--page-gutter); }
+  .topbar--wide .topbar__actions { display: none; }  /* «Настройки/Выйти» — в панели меню */
+
+  /* В brand_shell.html логотип и бургер остаются в одной строке;
+     обычная шапка страницы настроек сохраняет своё поведение. */
+  .topbar:has(.burger) { flex-wrap: nowrap; gap: 0.75rem; padding-top: 0.75rem; }
+
+  .burger {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    padding: 0 11px;
+    background: rgba(6, 16, 32, 0.6);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .burger:hover, .burger:focus-visible { border-color: var(--border-bright); }
+  .burger__line { display: block; height: 2px; border-radius: 2px; background: var(--fg); }
+
+  .layout { display: block; padding: 1rem var(--page-gutter) 3rem; }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    width: min(88vw, 360px);
+    overflow-y: auto;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    transform: translateX(-105%);
+    visibility: hidden;  /* закрытая панель не попадает в Tab-навигацию */
+    transition: transform 0.25s ease, visibility 0s linear 0.25s;
+    outline: none;
+  }
+  body.sidebar-open .sidebar {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.25s ease, visibility 0s;
+  }
+  body.sidebar-open { overflow: hidden; }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(2, 6, 14, 0.72);
+  }
+  .sidebar-backdrop[hidden] { display: none; }
+
+  .sidebar__close {
+    display: inline-flex;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.6rem;
+    line-height: 1;
+    padding: 0.2rem 0.6rem;
+    margin: -0.4rem -0.6rem 0 0;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .sidebar__close:hover { color: var(--fg); }
+
+  .sidebar__account {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+  .sidebar__account form { margin: 0; }
+
+  .content { width: 100%; }
+}
+
+.sidebar .hint { color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.sidebar .hint--warn { color: var(--blocked); }

@@ -2,11 +2,12 @@
 import datetime as dt
 import os
 from zoneinfo import ZoneInfo
-from flask import Blueprint, Flask, Response, render_template, url_for
+from flask import Blueprint, Flask, Response, redirect, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from site_app.auth import login_required
 from site_app.auth_views import auth_bp
-from site_app import csrf, db
+from site_app import brand_client, csrf, db
+from site_app.brands_views import brands_bp, render_brand_page, DEFAULT_TAB
 from site_app.settings_views import settings_bp
 from site_app.api_views import api_bp
 
@@ -30,8 +31,14 @@ pages = Blueprint("pages", __name__)
 
 @pages.get("/")
 @login_required
-def index() -> str:
-    return render_template("index.html")
+def index() -> str | Response:
+    brands, brands_error = brand_client.list_brands()
+    if brands:
+        return redirect(url_for("brands.brand_tab", brand_id=brands[0]["id"], tab=DEFAULT_TAB))
+    return render_brand_page(
+        "index.html", brands=brands, brands_error=brands_error,
+        brand=None, brand_id=None, active_tab=None,
+    )
 
 
 @pages.get("/healthz")
@@ -83,6 +90,7 @@ def create_app(config: dict | None = None) -> Flask:
 
     csrf.init_app(app)
     db.init_db()
+    app.register_blueprint(brands_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(auth_bp)

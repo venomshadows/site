@@ -1,7 +1,13 @@
-{% extends "app_shell.html" %}
-{% block content %}
-  <section class="panel">
-    <h1 class="page__title">Добро пожаловать</h1>
-    <p class="page__lead">Личное пространство venom_shadows. Здесь появятся инструменты для работы с сайтами.</p>
-  </section>
+{% extends "brand_shell.html" %}
+{% from '_macros.html' import brand_error_panel %}
+{% block title %}venom_shadows site{% endblock %}
+{% block tab_content %}
+  <div class="panel">
+    {% if brands_error %}
+      {{ brand_error_panel(brands_error) }}
+    {% else %}
+      <h1 class="page__title">Пока нет брендов</h1>
+      <p class="page__lead">Бренды приходят с Brand (brand.venomshadows.ru) — добавь их там, и они появятся здесь.</p>
+    {% endif %}
+  </div>
 {% endblock %}
