@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import hmac
 import threading
 import time
 from functools import wraps
@@ -57,19 +58,26 @@ def _live_attempts(key: str, now: float) -> list[float]:
     return attempts
 
 
-def is_rate_limited() -> bool:
+def reserve_attempt() -> bool:
     key = _client_key()
     with _attempts_lock:
-        return len(_live_attempts(key, time.time())) >= _MAX_ATTEMPTS
-
-
-def record_failed_attempt() -> None:
-    key = _client_key()
-    now = time.time()
-    with _attempts_lock:
+        now = time.time()
         attempts = _live_attempts(key, now)
+        if len(attempts) >= _MAX_ATTEMPTS:
+            return False
         attempts.append(now)
         _attempts[key] = attempts
+        return True
+
+
+def release_attempt() -> None:
+    key = _client_key()
+    with _attempts_lock:
+        attempts = _live_attempts(key, time.time())
+        if attempts:
+            attempts.pop()
+            if not attempts:
+                _attempts.pop(key, None)
 
 
 def clear_attempts() -> None:
@@ -80,9 +88,9 @@ def clear_attempts() -> None:
 
 def check_first_factor(username: str, password: str) -> bool:
     cfg = current_app.config
-    if not username or not password:
-        return False
-    return username == cfg["AUTH_USERNAME"] and check_password_hash(cfg["AUTH_PASSWORD_HASH"], password)
+    username_ok = hmac.compare_digest(username.encode("utf-8"), cfg["AUTH_USERNAME"].encode("utf-8"))
+    password_ok = check_password_hash(cfg["AUTH_PASSWORD_HASH"], password)
+    return username_ok and password_ok
 
 
 def check_second_factor(password: str) -> bool:

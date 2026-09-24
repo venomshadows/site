@@ -50,11 +50,11 @@ ROUTES = [('get', '/settings')] + [('post', path) for path in (
 
 @pytest.mark.parametrize('method,path', ROUTES)
 @pytest.mark.parametrize('stage', [None, 1, 2])
-def test_settings_auth_and_no_store(client, method, path, stage):
+def test_settings_auth_and_no_store(client, method, path, stage, csrf_post):
     if stage:
         with client.session_transaction() as session:
             session['stage'] = stage
-    response = getattr(client, method)(path)
+    response = (csrf_post(path) if method == "post" else client.get(path))
     assert response.headers['Cache-Control'] == 'no-store'
     if stage != 2:
         assert response.status_code == 302
@@ -75,12 +75,12 @@ def test_settings_auth_and_no_store(client, method, path, stage):
 
 
 @pytest.mark.parametrize('field', ['smtp_password', 'brand_api_key', 'telegram_bot_token'])
-def test_secret_preservation(client, login, field):
+def test_secret_preservation(client, login, field, csrf_post):
     login()
     secret = '  distinctive-secret  '
-    client.post('/settings', data={field: secret})
+    csrf_post('/settings', data={field: secret})
     for blank in ('', '   '):
-        client.post('/settings', data={field: blank})
+        csrf_post('/settings', data={field: blank})
         assert db.get_settings()[field] == secret
     response = client.get('/settings')
     assert secret not in response.text
@@ -90,12 +90,12 @@ def test_secret_preservation(client, login, field):
 
 @pytest.mark.parametrize('field', ['smtp_password', 'brand_api_key', 'telegram_bot_token'])
 @pytest.mark.parametrize('replacement', ['', 'new-secret'])
-def test_secret_explicit_clear(client, login, field, replacement):
+def test_secret_explicit_clear(client, login, field, replacement, csrf_post):
     login()
     assert f'name="{field}__clear"' not in client.get('/settings').text
-    client.post('/settings', data={field: 'saved-secret'})
+    csrf_post('/settings', data={field: 'saved-secret'})
     assert f'name="{field}__clear" value="1"' in client.get('/settings').text
-    response = client.post('/settings', data={field: replacement, f'{field}__clear': '1'}, follow_redirects=True)
+    response = csrf_post('/settings', data={field: replacement, f'{field}__clear': '1'}, follow_redirects=True)
     assert response.status_code == 200
     assert db.get_settings()[field] is None
     assert f'name="{field}__clear"' not in response.text
@@ -122,30 +122,30 @@ def test_api_key_creation_date_in_moscow(client, login):
 
 @pytest.mark.parametrize('port,expected', [('', 25), ('abc', 25), ('0', 25), ('-1', 25),
     ('65536', 25), ('999999999999999999999999', 25), ('587', 587), ('65535', 65535)])
-def test_port_validation(client, login, port, expected):
+def test_port_validation(client, login, port, expected, csrf_post):
     login()
-    response = client.post('/settings', data={'smtp_port': port}, follow_redirects=True)
+    response = csrf_post('/settings', data={'smtp_port': port}, follow_redirects=True)
     assert response.status_code == 200
     assert 'Настройки обновлены' in response.text
     assert db.get_settings()['smtp_port'] == expected
 
 
-def test_key_lifecycle(client, login):
+def test_key_lifecycle(client, login, csrf_post):
     assert not db.verify_api_key('anything')
     login()
-    client.post('/settings/api-key/generate')
+    csrf_post('/settings/api-key/generate')
     key = db.get_settings()['api_key']
     assert key.startswith('site_') and len(key) > 40
     assert db.get_settings()['api_key_created_at']
     assert db.verify_api_key(key)
     assert not db.verify_api_key('ключ')
     assert key in client.get('/settings').text
-    client.post('/settings/api-key/generate')
+    csrf_post('/settings/api-key/generate')
     assert not db.verify_api_key(key)
     new_key = db.get_settings()['api_key']
     assert new_key != key and db.verify_api_key(new_key)
-    client.post('/settings/api-key/revoke')
-    client.post('/settings/api-key/revoke')
+    csrf_post('/settings/api-key/revoke')
+    csrf_post('/settings/api-key/revoke')
     assert not db.verify_api_key(new_key)
     assert db.get_settings()['api_key_created_at'] is None
 
@@ -164,11 +164,11 @@ def test_ping(client, header):
     assert client.get('/api/v1/ping', headers={header: value}).status_code == 401
 
 
-def test_email_form_saves_and_sends(client, login, monkeypatch):
+def test_email_form_saves_and_sends(client, login, monkeypatch, csrf_post):
     login()
     smtp = MagicMock()
     monkeypatch.setattr(notifications.smtplib, 'SMTP', smtp)
-    response = client.post('/settings/test-email', data={
+    response = csrf_post('/settings/test-email', data={
         'notify_email': 'recipient@example.com', 'smtp_host': 'smtp.example.com',
         'smtp_port': '587', 'smtp_use_tls': '1', 'smtp_username': 'user', 'smtp_password': 'pass',
     })
@@ -177,35 +177,35 @@ def test_email_form_saves_and_sends(client, login, monkeypatch):
     smtp.return_value.__enter__.return_value.login.assert_called_once_with('user', 'pass')
     assert db.get_settings()['notify_email'] == 'recipient@example.com'
     smtp.side_effect = OSError('SMTP unavailable')
-    response = client.post('/settings/test-email', data={'notify_email': 'a@example.com'})
+    response = csrf_post('/settings/test-email', data={'notify_email': 'a@example.com'})
     assert response.status_code == 200 and 'SMTP unavailable' in response.text
 
 
-def test_telegram_form_saves_and_sends(client, login, monkeypatch):
+def test_telegram_form_saves_and_sends(client, login, monkeypatch, csrf_post):
     login()
     post = MagicMock()
     post.return_value.json.return_value = {'ok': True}
     monkeypatch.setattr(notifications.requests, 'post', post)
     form = {'telegram_bot_token': '123:ABC', 'telegram_chat_id': '42'}
-    response = client.post('/settings/test-telegram', data=form)
+    response = csrf_post('/settings/test-telegram', data=form)
     assert 'Отправлено успешно' in response.text
     assert db.get_settings()['telegram_chat_id'] == '42'
     assert post.call_args.args == ('https://api.telegram.org/bot123:ABC/sendMessage',)
     assert post.call_args.kwargs['data']['chat_id'] == '42'
     post.return_value.json.return_value = {'ok': False, 'description': '<b>denied</b>'}
-    response = client.post('/settings/test-telegram', data=form)
+    response = csrf_post('/settings/test-telegram', data=form)
     assert '&lt;b&gt;denied&lt;/b&gt;' in response.text
 
 
-def test_telegram_failure_does_not_expose_token(client, login, monkeypatch):
+def test_telegram_failure_does_not_expose_token(client, login, monkeypatch, csrf_post):
     login()
     token = '123456:ABC-DEF'
-    client.post('/settings', data={'telegram_bot_token': token})
+    csrf_post('/settings', data={'telegram_bot_token': token})
     post = MagicMock(side_effect=notifications.requests.ConnectionError(
         f'HTTPSConnectionPool(api.telegram.org): Max retries exceeded with url: /bot{token}/sendMessage'
     ))
     monkeypatch.setattr(notifications.requests, 'post', post)
-    response = client.post('/settings/test-telegram', data={
+    response = csrf_post('/settings/test-telegram', data={
         'telegram_bot_token': '', 'telegram_chat_id': '42',
     })
     assert response.status_code == 200

@@ -10,13 +10,13 @@ from site_app.auth_views import _BAD_CREDENTIALS, _BAD_SECOND_PASSWORD, _RATE_LI
 from site_app.webapp import ROBOTS_TXT, _REQUIRED_ENV, create_app
 
 
-def test_full_flow(client, first_factor):
+def test_full_flow(client, first_factor, csrf_post):
     assert client.get("/").location == "/login"
     first = first_factor(follow_redirects=True)
     assert first.request.path == "/login2"
     assert "Шаг 2 из 2" in first.text
     assert client.get("/").location == "/login"
-    response = client.post("/login2", data={"password": "second-password"}, follow_redirects=True)
+    response = csrf_post("/login2", data={"password": "second-password"}, follow_redirects=True)
     assert response.status_code == 200
     assert response.request.path == "/"
     assert "Добро пожаловать" in response.text
@@ -27,75 +27,75 @@ def test_full_flow(client, first_factor):
     for path in ("/login", "/login2"):
         assert client.get(path).location == "/"
     assert client.get("/logout").status_code == 405
-    assert client.post("/logout").location == "/login"
+    assert csrf_post("/logout").location == "/login"
     assert client.get("/").location == "/login"
     with client.session_transaction() as session:
         assert not session
 
 
 @pytest.mark.parametrize("method", ["get", "post"])
-def test_second_factor_requires_first(client, method):
-    assert getattr(client, method)("/login2").location == "/login"
+def test_second_factor_requires_first(client, method, csrf_post):
+    assert (csrf_post("/login2") if method == "post" else client.get("/login2")).location == "/login"
 
 
 @pytest.mark.parametrize("data", [{}, {"username": "admin", "password": "wrong"}, {"username": "wrong", "password": "first-password"}])
-def test_bad_first_factor(client, data):
-    response = client.post("/login", data=data)
+def test_bad_first_factor(client, data, csrf_post):
+    response = csrf_post("/login", data=data)
     assert response.status_code == 401
     assert _BAD_CREDENTIALS in response.text
     assert "auth-error" in response.text
 
 
-def test_bad_second_factor(client, first_factor):
+def test_bad_second_factor(client, first_factor, csrf_post):
     first_factor()
-    response = client.post("/login2", data={"password": "wrong"})
+    response = csrf_post("/login2", data={"password": "wrong"})
     assert response.status_code == 401
     assert _BAD_SECOND_PASSWORD in response.text
     assert client.get("/").location == "/login"
 
 
-def test_first_factor_clears_stale_session_and_trims_username(client):
+def test_first_factor_clears_stale_session_and_trims_username(client, csrf_post):
     with client.session_transaction() as session:
         session["stale"] = True
-    assert client.post("/login", data={"username": " admin ", "password": "first-password"}).location == "/login2"
+    assert csrf_post("/login", data={"username": " admin ", "password": "first-password"}).location == "/login2"
     with client.session_transaction() as session:
         assert dict(session) == {"stage": auth.STAGE_FIRST}
 
 
 @pytest.mark.parametrize("path", ["/login", "/login2"])
-def test_rate_limit_after_five_failures(client, first_factor, path):
+def test_rate_limit_after_five_failures(client, first_factor, path, csrf_post):
     if path == "/login2":
         first_factor()
     for _ in range(5):
-        assert client.post(path, data={"username": "admin", "password": "wrong"}).status_code == 401
-    response = client.post(path, data={"password": "wrong"})
+        assert csrf_post(path, data={"username": "admin", "password": "wrong"}).status_code == 401
+    response = csrf_post(path, data={"password": "wrong"})
     assert response.status_code == 429
     assert _RATE_LIMITED in response.text
 
 
-def test_first_factor_does_not_reset_shared_limit(client, first_factor):
+def test_first_factor_does_not_reset_shared_limit(client, first_factor, csrf_post):
     first_factor()
     for _ in range(4):
-        assert client.post("/login2", data={"password": "wrong"}).status_code == 401
+        assert csrf_post("/login2", data={"password": "wrong"}).status_code == 401
     assert first_factor().status_code == 302
-    assert client.post("/login2", data={"password": "wrong"}).status_code == 401
+    assert csrf_post("/login2", data={"password": "wrong"}).status_code == 401
     assert first_factor().status_code == 429
-    assert client.post("/login2", data={"password": "second-password"}).status_code == 429
+    assert csrf_post("/login2", data={"password": "second-password"}).status_code == 429
 
 
-def test_full_login_clears_failures(client, login):
+def test_full_login_clears_failures(client, login, csrf_post):
     for _ in range(4):
-        client.post("/login", data={"username": "admin", "password": "wrong"})
+        csrf_post("/login", data={"username": "admin", "password": "wrong"})
     assert login().location == "/"
     assert not auth._attempts
 
 
-def test_forwarded_spoof_does_not_reset_limit(client):
+def test_forwarded_spoof_does_not_reset_limit(client, csrf_post):
     for i in range(5):
-        response = client.post("/login", headers={"X-Forwarded-For": f"spoof-{i}, 10.0.0.5"})
+        response = csrf_post("/login", headers={"X-Forwarded-For": f"spoof-{i}, 10.0.0.5"})
         assert response.status_code == 401
-    assert client.post("/login", headers={"X-Forwarded-For": "new-spoof, 10.0.0.5"}).status_code == 429
-    assert client.post("/login", headers={"X-Forwarded-For": "10.0.0.6"}).status_code == 401
+    assert csrf_post("/login", headers={"X-Forwarded-For": "new-spoof, 10.0.0.5"}).status_code == 429
+    assert csrf_post("/login", headers={"X-Forwarded-For": "10.0.0.6"}).status_code == 401
 
 
 def test_healthz_public(client):
@@ -125,14 +125,14 @@ def test_sensitive_pages_are_not_stored(client, stage, path):
 
 @pytest.mark.parametrize("path", ["/login", "/login2"])
 @pytest.mark.parametrize("result", ["success", "invalid", "limited"])
-def test_login_submissions_are_not_stored(client, path, result):
+def test_login_submissions_are_not_stored(client, path, result, csrf_post):
     with client.session_transaction() as session:
         session["stage"] = auth.STAGE_FIRST
     if result == "limited":
         for _ in range(auth._MAX_ATTEMPTS):
-            client.post(path, data={"password": "wrong"})
+            csrf_post(path, data={"password": "wrong"})
     password = "first-password" if path == "/login" else "second-password"
-    response = client.post(path, data={
+    response = csrf_post(path, data={
         "username": "admin",
         "password": password if result == "success" else "wrong",
     })
@@ -196,9 +196,9 @@ def test_secure_cookie_environment(monkeypatch, credentials, value, expected):
     assert create_app(credentials).config["SESSION_COOKIE_SECURE"] is expected
 
 
-def test_cookie_flags(credentials):
+def test_cookie_flags(credentials, csrf_post):
     client = create_app(credentials).test_client()
-    response = client.post("/login", data={"username": "admin", "password": "first-password"})
+    response = csrf_post("/login", target=client, data={"username": "admin", "password": "first-password"})
     cookie = response.headers["Set-Cookie"]
     assert "Secure" in cookie and "HttpOnly" in cookie and "SameSite=Lax" in cookie
 

@@ -1,3 +1,5 @@
+import secrets
+
 import pytest
 from werkzeug.security import generate_password_hash
 
@@ -38,15 +40,33 @@ def client(app):
 
 
 @pytest.fixture
-def first_factor(client):
+def first_factor(csrf_post):
     def submit(**kwargs):
-        return client.post("/login", data={"username": "admin", "password": "first-password"}, **kwargs)
+        return csrf_post("/login", data={"username": "admin", "password": "first-password"}, **kwargs)
     return submit
 
 
 @pytest.fixture
-def login(client, first_factor):
+def login(csrf_post, first_factor):
     def submit():
         first_factor()
-        return client.post("/login2", data={"password": "second-password"})
+        return csrf_post("/login2", data={"password": "second-password"})
+    return submit
+
+
+@pytest.fixture
+def csrf_token(client):
+    def set_token(target=None):
+        token = secrets.token_urlsafe(32)
+        with (target or client).session_transaction() as sess:
+            sess["csrf_token"] = token
+        return token
+    return set_token
+
+
+@pytest.fixture
+def csrf_post(client, csrf_token):
+    def submit(path, data=None, target=None, **kwargs):
+        target = target or client
+        return target.post(path, data={**(data or {}), "csrf_token": csrf_token(target)}, **kwargs)
     return submit

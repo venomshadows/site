@@ -1,5 +1,5 @@
 {% extends "app_shell.html" %}
-{% from "_macros.html" import secret_key_panel, secret_field %}
+{% from "_macros.html" import secret_key_panel, secret_field, csrf_field %}
 {% block title %}Настройки — venom_shadows site{% endblock %}
 {% block content %}
     <div class="page-header">
@@ -20,6 +20,7 @@
     {% endif %}
 
     <form method="post" action="{{ url_for('settings.settings_save') }}" autocomplete="off">
+      {{ csrf_field() }}
       <div class="settings-grid">
         <section class="panel settings-section">
           <h2 class="settings-section__title">Email-уведомления</h2>
@@ -111,10 +112,12 @@
       {% endif %}
       <div class="settings-actions">
         <form method="post" action="{{ url_for('settings.settings_api_key_generate') }}" {% if settings.api_key %}data-confirm="Сгенерировать новый ключ? Текущий ключ перестанет работать."{% endif %}>
+          {{ csrf_field() }}
           <button type="submit" class="btn btn--primary">{{ 'Сгенерировать новый ключ' if settings.api_key else 'Сгенерировать ключ' }}</button>
         </form>
         {% if settings.api_key %}
           <form method="post" action="{{ url_for('settings.settings_api_key_revoke') }}" data-confirm="Отозвать текущий API-ключ? Интеграция, которая его использует, перестанет работать.">
+            {{ csrf_field() }}
             <button type="submit" class="btn btn--danger">Отозвать</button>
           </form>
         {% endif %}

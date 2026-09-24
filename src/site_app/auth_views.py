@@ -18,7 +18,7 @@ def login():
 @auth_bp.post("/login")
 @auth.no_store
 def login_submit():
-    if auth.is_rate_limited():
+    if not auth.reserve_attempt():
         return render_template("login.html", error=_RATE_LIMITED), 429
 
     username = request.form.get("username", "").strip()
@@ -30,11 +30,11 @@ def login_submit():
         # Иначе знающий первый пароль перебирал бы второй бесконечно:
         # четыре неверные попытки, потом успешный первый шаг — и лимит
         # снова чист.
+        auth.release_attempt()
         session.clear()
         session["stage"] = auth.STAGE_FIRST
         return redirect(url_for("auth.login2"))
 
-    auth.record_failed_attempt()
     return render_template("login.html", error=_BAD_CREDENTIALS), 401
 
 @auth_bp.get("/login2")
@@ -53,7 +53,7 @@ def login2_submit():
     if session.get("stage") not in (auth.STAGE_FIRST, auth.STAGE_FULL):
         return redirect(url_for("auth.login"))
 
-    if auth.is_rate_limited():
+    if not auth.reserve_attempt():
         return render_template("login2.html", error=_RATE_LIMITED), 429
 
     password = request.form.get("password", "")
@@ -63,7 +63,6 @@ def login2_submit():
         session.permanent = True
         return redirect(url_for("pages.index"))
 
-    auth.record_failed_attempt()
     return render_template("login2.html", error=_BAD_SECOND_PASSWORD), 401
 
 @auth_bp.post("/logout")

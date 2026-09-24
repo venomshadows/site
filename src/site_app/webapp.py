@@ -6,7 +6,7 @@ from flask import Blueprint, Flask, Response, render_template, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from site_app.auth import login_required
 from site_app.auth_views import auth_bp
-from site_app import db
+from site_app import csrf, db
 from site_app.settings_views import settings_bp
 from site_app.api_views import api_bp
 
@@ -81,6 +81,7 @@ def create_app(config: dict | None = None) -> Flask:
             version = 0
         return url_for("static", filename=filename, v=version)
 
+    csrf.init_app(app)
     db.init_db()
     app.register_blueprint(settings_bp)
     app.register_blueprint(api_bp)

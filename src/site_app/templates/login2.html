@@ -1,4 +1,5 @@
 {% extends "auth_base.html" %}
+{% from "_macros.html" import csrf_field %}
 
 {% block steps %}
   <span class="step step--done">✓</span>
@@ -11,6 +12,7 @@
 
 {% block auth_form %}
   <form method="post" action="{{ url_for('auth.login2_submit') }}" class="auth-form" autocomplete="off">
+    {{ csrf_field() }}
     <label class="field">
       <span class="field__label">Второй пароль</span>
       <input type="password" name="password" placeholder="Второй пароль" autofocus required autocomplete="one-time-code">
@@ -19,6 +21,7 @@
   </form>
 
   <form method="post" action="{{ url_for('auth.logout') }}" class="auth-form__back">
+    {{ csrf_field() }}
     <button type="submit" class="btn-link">← Назад ко входу</button>
   </form>
 {% endblock %}
