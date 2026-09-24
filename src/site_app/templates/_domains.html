@@ -1,0 +1,55 @@
+{% from '_macros.html' import csrf_field %}
+{% macro sort_link(field, label) -%}
+  {# A newly selected column always starts descending. #}
+  {% set next_order = 'asc' if sort == field and order == 'desc' else 'desc' %}
+  <th scope="col"{% if sort == field %} aria-sort="{{ 'ascending' if order == 'asc' else 'descending' }}"{% endif %}><a class="domain-sort-link" href="{{ url_for('brands.brand_tab', brand_id=brand_id, tab=active_tab, sort=field, order=next_order) }}">{{ label }}{% if sort == field %} <span aria-hidden="true">{{ '↑' if order == 'asc' else '↓' }}</span>{% endif %}</a></th>
+{%- endmacro %}
+<form method="post" action="{{ url_for('brands.domains_add', brand_id=brand_id, engine=active_tab, sort=sort, order=order) }}" class="domain-add">
+  {{ csrf_field() }}
+  <label class="field">
+    <span class="field__label">Добавить домены</span>
+    <textarea name="domains" rows="3" placeholder="example.ru, пример.рф" required aria-describedby="domain-help"></textarea>
+  </label>
+  <p class="hint" id="domain-help">Разделяйте домены пробелами, запятыми или переносами строк.</p>
+  <button class="btn btn--primary" type="submit">Добавить</button>
+</form>
+<form method="get" class="domain-sort">
+  <label class="field">Сортировка
+    <select name="sort">{% for key, title in sorts.items() %}<option value="{{ key }}"{{ ' selected' if sort == key else '' }}>{{ title }}</option>{% endfor %}</select>
+  </label>
+  <label class="field">Порядок
+    <select name="order"><option value="desc"{{ ' selected' if order == 'desc' else '' }}>По убыванию</option><option value="asc"{{ ' selected' if order == 'asc' else '' }}>По возрастанию</option></select>
+  </label>
+  <button type="submit" class="btn btn--secondary">Сортировать</button>
+</form>
+<form method="post" action="{{ url_for('brands.domains_bulk', brand_id=brand_id, engine=active_tab, sort=sort, order=order) }}">
+  {{ csrf_field() }}
+  <div class="domain-table-wrap">
+    <table class="domain-table">
+      <thead><tr><th><input type="checkbox" data-domains-all aria-label="Выбрать все"></th><th>Домен</th>{{ sort_link('status', 'Статус') }}{{ sort_link('created_at', 'Дата добавления') }}{{ sort_link('registered_at', 'Дата регистрации') }}</tr></thead>
+      <tbody>
+      {% for row in domain_rows %}
+        <tr>
+          <td><input type="checkbox" name="ids" value="{{ row.id }}" aria-label="Выбрать {{ row.display_domain }}"></td>
+          <td><span class="domain-name{{ ' domain-name--nested' if row.depth > 0 else '' }}" style="--depth: {{ row.depth }}">{{ row.display_domain }}</span></td>
+          <td><span class="domain-status {{ statuses[row.status].css }}">{{ statuses[row.status].title }}</span></td>
+          <td>{{ row.created_at|fmt_datetime }}</td><td>{{ row.registered_at|fmt_datetime }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="hint">Список доменов пуст.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="domain-actions">
+    <span class="domain-selection" role="status" aria-live="polite">Выбрано: <span data-domains-count>0</span></span>
+    <label class="field">Статус
+      <select name="status" data-domain-status>{% for key, status in statuses.items() %}<option value="{{ key }}">{{ status.title }}</option>{% endfor %}</select>
+    </label>
+    <label class="field" data-domain-parent hidden>Родительский домен
+      <select name="parent_id"><option value="">Выберите домен</option>{% for row in domain_rows %}<option value="{{ row.id }}">{{ row.display_domain }}</option>{% endfor %}</select>
+    </label>
+    <button type="submit" class="btn btn--secondary" name="action" value="status">Применить статус</button>
+    <button type="submit" class="btn btn--danger" name="action" value="delete" data-confirm="Удалить выбранные домены?">Удалить</button>
+  </div>
+</form>

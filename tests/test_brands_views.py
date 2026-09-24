@@ -10,6 +10,37 @@ BRANDS = [{'id': 7, 'name': 'Первый', 'query_frequency_total': 123},
           {'id': 8, 'name': 'Второй'}]
 
 
+@pytest.mark.parametrize('tab', ['yandex', 'google'])
+@pytest.mark.parametrize('sort', ['created_at', 'status', 'registered_at'])
+@pytest.mark.parametrize('order, arrow, aria', [('asc', '↑', 'ascending'), ('desc', '↓', 'descending')])
+def test_domain_sort_headers(client, login, tab, sort, order, arrow, aria):
+    login()
+    with patch.object(brand_client, 'list_brands', return_value=(BRANDS, None)):
+        page = client.get(f'/brands/7/{tab}?sort={sort}&order={order}')
+    assert page.status_code == 200
+    head = page.text.split('<thead>')[1].split('</thead>')[0]
+    for field in ('created_at', 'status', 'registered_at'):
+        direction = 'asc' if field == sort and order == 'desc' else 'desc'
+        assert f'href="/brands/7/{tab}?sort={field}&amp;order={direction}"' in head
+    assert head.count('aria-sort=') == 1
+    assert f'aria-sort="{aria}"' in head
+    assert f'<span aria-hidden="true">{arrow}</span>' in head
+    assert '<select name="sort">' in page.text
+    assert 'Выбрано: <span data-domains-count>0</span>' in page.text
+
+
+def test_domain_sort_headers_default_and_invalid_query(client, login):
+    login()
+    with patch.object(brand_client, 'list_brands', return_value=(BRANDS, None)):
+        default = client.get('/brands/7/yandex').text
+        invalid = client.get('/brands/7/yandex?sort=DROP&order=oops').text
+    for page in (default, invalid):
+        head = page.split('<thead>')[1].split('</thead>')[0]
+        assert 'sort=created_at&amp;order=asc' in head
+        assert 'aria-sort="descending"' in head
+        assert '<span aria-hidden="true">↓</span>' in head
+
+
 def test_index_redirects_to_first_brand(client, login):
     login()
     with patch.object(brand_client, 'list_brands', return_value=(BRANDS, None)):
@@ -31,7 +62,13 @@ def test_tabs(client, login, tab):
         response = client.get(f'/brands/7/{tab}')
     assert response.status_code == 200
     assert f'<h1 class="page__title">{TABS[tab]["title"]}</h1>' in response.text
-    assert 'Раздел в разработке.' in response.text
+    if TABS[tab]['domains']:
+        assert 'Список доменов пуст.' in response.text
+        assert 'name="domains"' in response.text
+        assert 'class="domain-status ' not in response.text
+        assert 'Раздел в разработке.' not in response.text
+    else:
+        assert 'Раздел в разработке.' in response.text
     assert '(123)' in response.text and '()' not in response.text
     assert 'brand-list__item--active' in response.text
     assert 'aria-current="page"' in response.text

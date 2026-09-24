@@ -5,7 +5,11 @@
   <div class="panel">
     {% if brand %}
       <h1 class="page__title">{{ tabs[active_tab].title }}</h1>
-      <p class="page__lead">Раздел в разработке.</p>
+      {% if tabs[active_tab].domains %}
+        {% include '_domains.html' %}
+      {% else %}
+        <p class="page__lead">Раздел в разработке.</p>
+      {% endif %}
     {% else %}
       {{ brand_error_panel(brands_error) }}
     {% endif %}

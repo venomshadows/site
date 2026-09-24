@@ -40,6 +40,18 @@ def _connect():
 def init_db() -> None:
     with _connect() as conn:
         columns = ", ".join(f"{name} {ddl}" for name, ddl in SETTINGS_COLUMNS.items())
+        conn.execute("""CREATE TABLE IF NOT EXISTS domains (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand_id INTEGER NOT NULL,
+            engine TEXT NOT NULL,
+            domain TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'new',
+            parent_id INTEGER REFERENCES domains(id),
+            created_at TEXT NOT NULL,
+            registered_at TEXT,
+            UNIQUE(brand_id, engine, domain)
+        )""")
+        conn.execute("CREATE INDEX IF NOT EXISTS domains_list ON domains (brand_id, engine)")
         conn.execute(f"CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK (id = 1), {columns})")
         existing = {row["name"] for row in conn.execute("PRAGMA table_info(settings)")}
         for name, ddl in SETTINGS_COLUMNS.items():

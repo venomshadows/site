@@ -1,5 +1,5 @@
 document.addEventListener('submit', (event) => {
-  const message = event.target.dataset.confirm;
+  const message = event.submitter?.dataset.confirm || event.target.dataset.confirm;
   if (message && !window.confirm(message)) event.preventDefault();
 });
 
@@ -55,4 +55,47 @@ document.addEventListener('click', async (event) => {
   window.matchMedia("(min-width: 861px)").addEventListener("change", (event) => {
     if (event.matches) setOpen(false, false);
   });
+})();
+
+// Выбор ограничен текущей формой списка.
+(function () {
+  function syncSelection(form) {
+    const count = form.querySelector('[data-domains-count]');
+    if (!count) return;
+    const rows = form.querySelectorAll('input[name="ids"]');
+    const selected = Array.from(rows).filter((checkbox) => checkbox.checked).length;
+    count.textContent = String(selected);
+    const all = form.querySelector('[data-domains-all]');
+    if (all) {
+      all.checked = rows.length > 0 && selected === rows.length;
+      all.indeterminate = selected > 0 && selected < rows.length;
+    }
+  }
+  document.addEventListener('change', (event) => {
+    if (!event.target.matches('[data-domains-all], input[name="ids"]')) return;
+    const form = event.target.form;
+    if (!form) return;
+    if (event.target.matches('[data-domains-all]')) {
+      form.querySelectorAll('input[name="ids"]').forEach((checkbox) => {
+        checkbox.checked = event.target.checked;
+      });
+    }
+    syncSelection(form);
+  });
+  window.addEventListener('pageshow', () => {
+    document.querySelectorAll('[data-domains-all]').forEach((all) => syncSelection(all.form));
+  });
+  document.querySelectorAll('[data-domains-all]').forEach((all) => syncSelection(all.form));
+})();
+
+// Родитель нужен только для статуса «В клее».
+(function () {
+  function sync(select) {
+    const parent = select.form.querySelector('[data-domain-parent]');
+    if (parent) parent.hidden = select.value !== 'glued';
+  }
+  document.addEventListener('change', (event) => {
+    if (event.target.matches('[data-domain-status]')) sync(event.target);
+  });
+  document.querySelectorAll('[data-domain-status]').forEach(sync);
 })();

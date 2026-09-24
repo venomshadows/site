@@ -12,6 +12,7 @@
   --cyan: #35e0e0;
 
   --ok: #22c88f;
+  --warn: #edc458;
   --blocked: #ff4d6a;
 
   --border: rgba(91, 180, 255, 0.18);
@@ -698,3 +699,43 @@ input[type="number"]:focus {
 
 .sidebar .hint { color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
 .sidebar .hint--warn { color: var(--blocked); }
+
+/* Домены: общая таблица для поисковых вкладок. */
+.domain-add { margin: 1.5rem 0; }
+.domain-add .hint, .domain-table .hint { color: var(--muted); }
+.domain-add textarea, .domain-sort select, .domain-actions select {
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--fg);
+  font: inherit;
+}
+.domain-add textarea { resize: vertical; }
+.domain-add textarea:focus, .domain-sort select:focus, .domain-actions select:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.domain-sort, .domain-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin: 1.5rem 0; }
+.domain-sort .field, .domain-actions .field { margin: 0; min-width: 12rem; max-width: 100%; }
+.domain-actions [hidden] { display: none; }
+.domain-actions { position: sticky; bottom: 0; z-index: 2; padding: 1rem; background: linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel)); border-top: 1px solid var(--border); box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2); }
+.domain-selection { align-self: center; white-space: nowrap; }
+.domain-sort-link { color: inherit; text-underline-offset: 0.2em; }
+.domain-sort-link:hover, .domain-sort-link:focus-visible { color: var(--blue-bright); }
+.domain-table-wrap { overflow-x: auto; }
+.domain-table { width: 100%; border-collapse: collapse; text-align: left; }
+.domain-table th, .domain-table td { padding: 0.75rem; border-bottom: 1px solid var(--border); }
+.domain-table th { color: var(--muted); font-size: 0.85rem; }
+.domain-name { position: relative; display: block; padding-left: calc(var(--depth) * 2.25rem); overflow-wrap: anywhere; min-width: 10rem; }
+.domain-name--nested::before { content: ''; position: absolute; left: calc(var(--depth) * 2.25rem - 1.5rem); top: 0.1em; width: 1rem; height: 0.75em; border-left: 1px solid var(--muted); border-bottom: 1px solid var(--muted); }
+.domain-status { display: inline-block; padding: 0.2rem 0.55rem; border: 1px solid currentColor; border-radius: 999px; font-size: 0.8rem; white-space: nowrap; }
+.domain-status--new { color: var(--blue-bright); background: rgba(91, 180, 255, 0.1); }
+.domain-status--in-use { color: var(--ok); background: rgba(34, 200, 143, 0.1); }
+.domain-status--used { color: var(--blocked); background: rgba(255, 77, 106, 0.1); }
+.domain-status--glued { color: var(--warn); background: rgba(237, 196, 88, 0.1); }
+@media (max-width: 860px) {
+  .domain-sort .field, .domain-actions .field { width: 100%; }
+  .domain-table th, .domain-table td { padding: 0.55rem; }
+}
