@@ -58,7 +58,7 @@ def test_nginx_static_alias_points_to_package_static(app):
 
 def test_env_example_lists_exactly_known_variables():
     names = set(re.findall(r"^([A-Z_]+)=", read(".env.example"), flags=re.M))
-    assert names == {*_REQUIRED_ENV, "SESSION_COOKIE_SECURE"}
+    assert names == {*_REQUIRED_ENV, "SESSION_COOKIE_SECURE", "DATABASE_PATH"}
 
 
 def static_references() -> set[str]:

@@ -13,7 +13,9 @@ import threading
 import time
 from functools import wraps
 
-from flask import after_this_request, current_app, redirect, request, session, url_for
+from site_app import db
+
+from flask import jsonify, after_this_request, current_app, redirect, request, session, url_for
 from werkzeug.security import check_password_hash
 
 # Стадии сессии: ключа "stage" нет — не вошёл; 1 — прошёл логин/пароль;
@@ -109,6 +111,35 @@ def login_required(view):
     def wrapped(*args, **kwargs):
         if session.get("stage") != STAGE_FULL:
             return redirect(url_for("auth.login"))
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def _extract_api_key() -> str:
+    """Ключ ищем в заголовке Authorization: Bearer <ключ>, а если его нет —
+    в заголовке X-API-Key (удобнее для некоторых HTTP-клиентов/прокси,
+    которые сложно настроить на Bearer-схему). Та же схема, что в
+    rkn-checker."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[len("Bearer ") :].strip()
+    return request.headers.get("X-API-Key", "").strip()
+
+
+def api_key_required(view):
+    """Для маршрутов внешнего API (/api/v1/*) — отдельная от
+    сессионной аутентификации (login_required) схема: сравнение ключа из
+    заголовка с активным ключом из settings.api_key (см. db.py). Ключ
+    передаётся заголовком, а не куки сессии, так что запрос не зависит от
+    браузерного состояния — им может пользоваться сторонний сервис
+    напрямую, без входа через /login."""
+
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        key = _extract_api_key()
+        if not db.verify_api_key(key):
+            return jsonify(error="Неверный или отсутствующий API-ключ"), 401
         return view(*args, **kwargs)
 
     return wrapped

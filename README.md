@@ -61,7 +61,26 @@ $env:SESSION_COOKIE_SECURE = "0"
   `VPS_SSH_FINGERPRINT` — отпечаток именно ECDSA-ключа хоста
   (`ssh-keyscan -t ecdsa <IP> | ssh-keygen -lf -`; его же печатает `setup-server.sh`):
   action на Go согласует ECDSA раньше Ed25519.
+- **Исходящая почта** — тот же скрипт ставит Postfix только на localhost
+  (порт 25 в ufw не открывается) и OpenDKIM; в конце печатает готовые
+  TXT-записи SPF, DKIM и необязательный DMARC.
 - **Смена пароля на сервере:** получить хеш командой
   `sudo -u site /opt/site/.venv/bin/python3 /opt/site/deploy/gen_password_hash.py`,
   вписать его в `/opt/site/.env` и перезапустить сервис:
   `sudo -H -u site env XDG_RUNTIME_DIR=/run/user/$(id -u site) systemctl --user restart site`.
+
+## Настройки и API
+
+После двухэтапного входа открой `/settings`: здесь задаются email/SMTP,
+Telegram-бот и API-ключ Brand. Кнопки тестовой отправки сначала сохраняют форму,
+затем показывают результат доставки. Пустые поля пароля SMTP и ключа Brand
+сохраняют прежнее значение. По умолчанию SMTP — `localhost:25`, отправитель —
+`site@site.venomshadows.ru`; для внешнего SMTP доступны логин и STARTTLS.
+
+API-ключ сайта можно создать, скопировать, заменить или отозвать на той же странице.
+`GET /api/v1/ping` возвращает `{"ok": true}` с заголовком
+`Authorization: Bearer <ключ>` или `X-API-Key: <ключ>`; без действующего ключа — 401.
+Новый ключ сразу заменяет прежний. Ключ хранится открыто, чтобы его можно было
+повторно скопировать: защищай файл БД и резервные копии как учётные данные.
+SQLite создаётся автоматически в `data/site.db` относительно рабочей папки
+(`/opt/site` в сервисе); необязательная переменная `DATABASE_PATH` меняет путь.

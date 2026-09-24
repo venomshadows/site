@@ -13,6 +13,11 @@ Environment="PYTHONUNBUFFERED=1"
 # Знак "-" перед путём = не считать ошибкой, если файла ещё нет (тогда
 # приложение само откажется стартовать с понятной ошибкой в логах).
 EnvironmentFile=-/opt/site/.env
+# /opt/site/data/site.db хранит smtp_password, brand_api_key,
+# telegram_bot_token и api_key сайта. systemd по умолчанию ставит
+# umask 0022, и файл БД вместе с -wal/-shm создаётся 0644
+# (world-readable), в отличие от .env (0600).
+UMask=0077
 
 # Слушаем локальный TCP-порт — nginx проксирует на него (см. deploy/nginx.conf.example).
 #

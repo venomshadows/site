@@ -7,7 +7,7 @@ from flask import request
 
 from site_app import auth
 from site_app.auth_views import _BAD_CREDENTIALS, _BAD_SECOND_PASSWORD, _RATE_LIMITED
-from site_app.webapp import _REQUIRED_ENV, create_app
+from site_app.webapp import ROBOTS_TXT, _REQUIRED_ENV, create_app
 
 
 def test_full_flow(client, first_factor):
@@ -103,6 +103,13 @@ def test_healthz_public(client):
     assert response.status_code == 200
     assert response.mimetype == "text/plain"
     assert response.text == "ok"
+
+
+def test_robots_txt_public(client):
+    response = client.get("/robots.txt")
+    assert response.status_code == 200
+    assert response.headers["Content-Type"].startswith("text/plain")
+    assert response.data == ROBOTS_TXT.encode("utf-8")
 
 
 @pytest.mark.parametrize("stage", [None, auth.STAGE_FIRST, auth.STAGE_FULL])

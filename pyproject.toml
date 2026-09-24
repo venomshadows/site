@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Сайт site.venomshadows.ru"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["flask>=3.0,<4"]
+# На Windows tzdata даёт ZoneInfo базу часовых поясов; на Linux используется системная база.
+dependencies = ["flask>=3.0,<4", "requests>=2.31,<3", "tzdata; platform_system == 'Windows'"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9"]
@@ -18,4 +19,4 @@ deploy = ["gunicorn>=22.0,<24"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-site_app = ["templates/*.html", "static/*.css", "static/img/*", "static/favicon/*"]
+site_app = ["templates/*.html", "static/*.css", "static/*.js", "static/img/*", "static/favicon/*"]

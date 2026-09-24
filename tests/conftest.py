@@ -6,7 +6,8 @@ from site_app.webapp import _REQUIRED_ENV, create_app
 
 
 @pytest.fixture(autouse=True)
-def clean_state(monkeypatch):
+def clean_state(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "site.db"))
     for name in (*_REQUIRED_ENV, "SESSION_COOKIE_SECURE"):
         monkeypatch.delenv(name, raising=False)
     with auth._attempts_lock:

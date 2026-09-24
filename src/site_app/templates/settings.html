@@ -1,0 +1,123 @@
+{% extends "app_shell.html" %}
+{% from "_macros.html" import secret_key_panel, secret_field %}
+{% block title %}Настройки — venom_shadows site{% endblock %}
+{% block content %}
+    <div class="page-header">
+      <div class="page-header__text">
+        <h1 class="page__title">Настройки</h1>
+      </div>
+    </div>
+
+    {% if saved %}
+      <div class="result result--ok">
+        <span class="result__badge">Сохранено</span><span>Настройки обновлены.</span>
+      </div>
+    {% endif %}
+    {% if test_result %}
+      <div class="result {{ 'result--ok' if test_result.ok else 'result--error' }}">
+        <span class="result__badge">{{ test_result.channel_label }}</span><span>{{ test_result.message }}</span>
+      </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('settings.settings_save') }}" autocomplete="off">
+      <div class="settings-grid">
+        <section class="panel settings-section">
+          <h2 class="settings-section__title">Email-уведомления</h2>
+          <p class="settings-section__hint">
+            Отправка через SMTP, настроенный ниже — по умолчанию локальный сервер (localhost:25) без
+            авторизации, можно указать и внешний SMTP с логином/паролем и STARTTLS.
+          </p>
+
+          <label class="field">
+            <span class="field__label">Email для уведомлений</span>
+            <input type="email" name="notify_email" placeholder="admin@example.com" value="{{ settings.notify_email or '' }}">
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span class="field__label">SMTP-сервер</span>
+              <input type="text" name="smtp_host" placeholder="localhost" value="{{ settings.smtp_host or 'localhost' }}">
+            </label>
+            <label class="field">
+              <span class="field__label">Порт</span>
+              <input type="number" name="smtp_port" min="1" max="65535" value="{{ settings.smtp_port or 25 }}">
+            </label>
+          </div>
+
+          <div class="field-row">
+            <label class="field">
+              <span class="field__label">Логин SMTP (необязательно)</span>
+              <input type="text" name="smtp_username" placeholder="без авторизации, если пусто" value="{{ settings.smtp_username or '' }}" autocomplete="off">
+            </label>
+            {{ secret_field('Пароль SMTP', 'smtp_password', settings.smtp_password, 'без авторизации, если пусто') }}
+          </div>
+
+          <label class="field">
+            <span class="field__label">Адрес отправителя (необязательно)</span>
+            <input type="text" name="smtp_from" placeholder="site@site.venomshadows.ru" value="{{ settings.smtp_from or '' }}">
+          </label>
+
+          <label class="field field--checkbox">
+            <input type="checkbox" name="smtp_use_tls" value="1" {{ 'checked' if settings.smtp_use_tls }}>
+            <span class="field__label">Использовать STARTTLS</span>
+          </label>
+        </section>
+
+        <section class="panel settings-section">
+          <h2 class="settings-section__title">Telegram-бот</h2>
+          <p class="settings-section__hint">
+            Обычный Bot API. Токен получаешь у @BotFather, а chat_id — у того чата/пользователя,
+            который должен получать уведомления; получателю нужно один раз самому написать боту
+            <code>/start</code> — иначе Bot API не даёт написать первым.
+          </p>
+
+          {{ secret_field('Токен бота', 'telegram_bot_token', settings.telegram_bot_token, '123456789:AA…') }}
+
+          <label class="field">
+            <span class="field__label">Chat ID</span>
+            <input type="text" name="telegram_chat_id" placeholder="например, 123456789" value="{{ settings.telegram_chat_id or '' }}">
+          </label>
+        </section>
+
+        {{ secret_key_panel(
+          'API-ключ Brand',
+          'Ключ сервиса Brand для интеграции с сайтом.',
+          'brand_api_key',
+          settings.brand_api_key
+        ) }}
+
+
+      </div>
+
+      <div class="settings-actions">
+        <button type="submit" class="btn btn--primary">Сохранить</button>
+        <button type="submit" formaction="{{ url_for('settings.settings_test_email') }}" class="btn btn--secondary">Отправить тестовое письмо</button>
+        <button type="submit" formaction="{{ url_for('settings.settings_test_telegram') }}" class="btn btn--secondary">Отправить тестовое сообщение в Telegram</button>
+      </div>
+    </form>
+
+
+    <section class="panel settings-section">
+      <h2 class="settings-section__title">API-ключ сайта</h2>
+      <p class="settings-section__hint">Передавай ключ в заголовке <code>Authorization: Bearer &lt;ключ&gt;</code> или <code>X-API-Key</code>. Проверка доступа: <code>GET /api/v1/ping</code>. Генерация нового ключа сразу отзывает предыдущий.</p>
+      {% if settings.api_key %}
+        <label class="field" for="api-key-value"><span class="field__label">Активный ключ (создан {{ settings.api_key_created_at | fmt_datetime }})</span></label>
+        <div class="api-key-row">
+          <input type="text" readonly value="{{ settings.api_key }}" id="api-key-value">
+          <button type="button" class="btn btn--secondary" data-copy-target="api-key-value">Копировать</button>
+        </div>
+      {% else %}
+        <p class="settings-section__hint">Ключ ещё не создан — запросы к API отклоняются.</p>
+      {% endif %}
+      <div class="settings-actions">
+        <form method="post" action="{{ url_for('settings.settings_api_key_generate') }}" {% if settings.api_key %}data-confirm="Сгенерировать новый ключ? Текущий ключ перестанет работать."{% endif %}>
+          <button type="submit" class="btn btn--primary">{{ 'Сгенерировать новый ключ' if settings.api_key else 'Сгенерировать ключ' }}</button>
+        </form>
+        {% if settings.api_key %}
+          <form method="post" action="{{ url_for('settings.settings_api_key_revoke') }}" data-confirm="Отозвать текущий API-ключ? Интеграция, которая его использует, перестанет работать.">
+            <button type="submit" class="btn btn--danger">Отозвать</button>
+          </form>
+        {% endif %}
+      </div>
+    </section>
+{% endblock %}

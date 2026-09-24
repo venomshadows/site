@@ -2,7 +2,39 @@
   <img class="brand-logo" src="{{ static_url('img/logo.webp') }}" width="800" height="333" alt="venom_shadows site">
 {%- endmacro %}
 {% macro account_links() -%}
+  <a href="{{ url_for('settings.settings_page') }}" class="btn-link">Настройки</a>
   <form method="post" action="{{ url_for('auth.logout') }}">
     <button type="submit" class="btn-link">Выйти</button>
   </form>
+{%- endmacro %}
+
+{% macro secret_field(label, field_name, has_value, empty_placeholder='Ключ ещё не задан') -%}
+  <div class="field">
+    <label for="{{ field_name }}" class="field__label">{{ label }}</label>
+    <input
+      id="{{ field_name }}"
+      type="password"
+      name="{{ field_name }}"
+      placeholder="{{ '•••••••• (оставь пустым, чтобы не менять)' if has_value else empty_placeholder }}"
+      autocomplete="new-password"
+    >
+    {% if has_value %}
+      <label class="field field--checkbox">
+        <input type="checkbox" name="{{ field_name }}__clear" value="1">
+        <span class="field__label">Очистить</span>
+      </label>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro secret_key_panel(title, hint, field_name, has_value) -%}
+  <section class="panel settings-section">
+    <h2 class="settings-section__title">{{ title }}</h2>
+    <p class="settings-section__hint">
+      {{ hint }}
+      {% if has_value %}Уже сохранён — оставь поле пустым, чтобы не менять его.{% endif %}
+    </p>
+
+    {{ secret_field('API-ключ', field_name, has_value) }}
+  </section>
 {%- endmacro %}

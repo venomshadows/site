@@ -52,6 +52,26 @@ run_as_app() {
   sudo -H -u "$APP_USER" env "XDG_RUNTIME_DIR=${USER_RUNTIME_DIR}" "$@"
 }
 
+# Тот же неинтерактивный apt, что и в шаге с базовыми пакетами.
+apt_install() {
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null
+}
+
+# opendkim-genkey пишет TXT несколькими кусками в кавычках. Склеивает их
+# в одну строку, которую можно целиком вставить в DNS.
+dkim_txt_value() {
+  awk '
+    {
+      rest = $0
+      while (match(rest, /"[^"]*"/)) {
+        out = out substr(rest, RSTART + 1, RLENGTH - 2)
+        rest = substr(rest, RSTART + RLENGTH)
+      }
+    }
+    END { printf "%s\n", out }
+  ' "$1"
+}
+
 # ssh-keyscan не удостоверяет ключ. Пишем в known_hosts только те строки,
 # чей отпечаток есть в официальном списке GitHub (RSA, ECDSA, Ed25519):
 # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
@@ -95,7 +115,7 @@ pin_github_host_keys() {
   chown "${APP_USER}:${APP_USER}" "$known_hosts"
 }
 
-echo "== 1/10: часовой пояс сервера (Europe/Moscow) =="
+echo "== 1/11: часовой пояс сервера (Europe/Moscow) =="
 # На само приложение не влияет (пока оно ничего не показывает по времени),
 # но делает понятными системные логи и `ls -la` при заходе по SSH, а также
 # задаёт локальное время для будущих systemd-таймеров (OnCalendar
@@ -103,12 +123,11 @@ echo "== 1/10: часовой пояс сервера (Europe/Moscow) =="
 timedatectl set-timezone Europe/Moscow
 echo "Часовой пояс: $(timedatectl show --property=Timezone --value)"
 
-echo "== 2/10: apt update && пакеты =="
+echo "== 2/11: apt update && пакеты =="
 apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-  python3-venv python3-pip git nginx certbot python3-certbot-nginx ufw dnsutils curl >/dev/null
+apt_install python3-venv python3-pip git nginx certbot python3-certbot-nginx ufw dnsutils curl
 
-echo "== 3/10: пользователь ${APP_USER} =="
+echo "== 3/11: пользователь ${APP_USER} =="
 if ! id -u "$APP_USER" >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash "$APP_USER"
   echo "Создан пользователь ${APP_USER}"
@@ -116,7 +135,7 @@ else
   echo "Пользователь ${APP_USER} уже существует — пропуск"
 fi
 
-echo "== 4/10: deploy-ключ для клонирования репозитория (VPS -> GitHub, read-only) =="
+echo "== 4/11: deploy-ключ для клонирования репозитория (VPS -> GitHub, read-only) =="
 DEPLOY_KEY="/home/${APP_USER}/.ssh/id_ed25519_deploy"
 if [[ ! -f "$DEPLOY_KEY" ]]; then
   sudo -u "$APP_USER" mkdir -p "/home/${APP_USER}/.ssh"
@@ -145,7 +164,7 @@ else
   NEED_DEPLOY_KEY_CONFIRM=0
 fi
 
-echo "== 5/10: клонирование / обновление репозитория =="
+echo "== 5/11: клонирование / обновление репозитория =="
 if [[ ! -d "${APP_DIR}/.git" ]]; then
   if [[ "${NEED_DEPLOY_KEY_CONFIRM:-0}" -eq 1 ]]; then
     echo "Пропускаю клонирование: сначала добавь deploy-ключ в GitHub (см. вывод выше) и перезапусти скрипт."
@@ -169,7 +188,7 @@ else
   echo "Репозиторий уже склонирован в ${APP_DIR} — пропуск (обновления идут через GitHub Actions)"
 fi
 
-echo "== 6/10: venv и зависимости =="
+echo "== 6/11: venv и зависимости =="
 if [[ ! -d "${APP_DIR}/.venv" ]]; then
   sudo -H -u "$APP_USER" python3 -m venv "${APP_DIR}/.venv"
 fi
@@ -181,7 +200,7 @@ fi
 # -H: кэш pip — в ~/.cache пользователя, не root.
 sudo -H -u "$APP_USER" bash -c "source ${APP_DIR}/.venv/bin/activate && pip install -q --upgrade pip && pip install -q -e '${APP_DIR}[deploy]'"
 
-echo "== 7/10: .env (SECRET_KEY + логин/пароли для входа) =="
+echo "== 7/11: .env (SECRET_KEY + логин/пароли для входа) =="
 # Пароли генерируются случайными, в .env кладутся только их хеши, а сами
 # пароли — в SECRETS_FILE (доступен только root). Так деплой получается
 # одной командой, а не останавливается на ручном заполнении .env; сменить
@@ -235,7 +254,7 @@ else
   echo "${ENV_FILE} уже существует — содержимое не меняю, владелец ${APP_USER}, режим 600"
 fi
 
-echo "== 8/10: пользовательский systemd и запуск через deploy/update.sh =="
+echo "== 8/11: пользовательский systemd и запуск через deploy/update.sh =="
 # lingering — чтобы systemd-инстанс пользователя жил без активной сессии
 # (иначе systemctl --user недоступен из неинтерактивной SSH-команды)
 loginctl enable-linger "$APP_USER"
@@ -259,7 +278,104 @@ fi
 # Юниты, restart и /healthz — внутри update.sh (тот же скрипт, что и деплой).
 run_as_app bash "${APP_DIR}/deploy/update.sh"
 
-echo "== 9/10: ключ для автодеплоя из GitHub Actions =="
+echo "== 9/11: Postfix + OpenDKIM (исходящая почта, только отправка) =="
+# Postfix — локальный SMTP в режиме «только отправка»: приложение шлёт
+# через localhost:25 без авторизации. inet_interfaces = loopback-only —
+# снаружи порт 25 недоступен ни для приёма чужой почты, ни как открытый
+# relay. ufw ниже порт 25 не открывает.
+DKIM_SELECTOR="mail"
+DKIM_KEY_DIR="/etc/opendkim/keys/${DOMAIN}"
+if ! dpkg -s postfix >/dev/null 2>&1; then
+  debconf-set-selections <<EOF
+postfix postfix/main_mailer_type select Internet Site
+postfix postfix/mailname string ${DOMAIN}
+EOF
+  apt_install postfix
+  echo "Postfix установлен."
+  # Пакет со штатным debconf «Internet Site» часто стартует демон сразу,
+  # ещё со слушанием не только loopback. ufw включается в конце скрипта,
+  # поэтому останавливаем его до postconf и enable --now ниже: иначе на
+  # чистом сервере порт 25 какое-то время открыт наружу.
+  systemctl stop postfix >/dev/null 2>&1 || true
+else
+  echo "Postfix уже установлен — пропуск установки, только проверяю настройки ниже"
+fi
+# mailname и настройки milter применяем при каждом запуске: пакет мог
+# остаться от прерванного прогона со значениями по умолчанию.
+printf '%s\n' "$DOMAIN" > /etc/mailname
+postconf -e "myhostname = ${DOMAIN}"
+postconf -e "inet_interfaces = loopback-only"
+postconf -e "inet_protocols = ipv4"
+# Включение, не restart: базовые postconf уже записаны, а milter-сокет
+# OpenDKIM ещё не слушатель. Restart — один, после настроек milter ниже,
+# иначе postfix при старте ищет сокет, которого нет (milter_default_action=accept
+# это переживает, но гонять сервис дважды незачем).
+systemctl enable --now postfix >/dev/null
+
+# OpenDKIM подписывает исходящую почту. Вместе с SPF (его нужно прописать
+# в DNS отдельно, см. финальную подсказку) это нужно получателям вроде
+# Gmail, которые без SPF/DKIM отклоняют письмо. Сам Postfix так не умеет.
+if ! dpkg -s opendkim opendkim-tools >/dev/null 2>&1; then
+  apt_install opendkim opendkim-tools
+  echo "OpenDKIM установлен."
+else
+  echo "OpenDKIM уже установлен — пропуск установки"
+fi
+if [[ ! -f "${DKIM_KEY_DIR}/${DKIM_SELECTOR}.private" ]]; then
+  mkdir -p "$DKIM_KEY_DIR"
+  ( cd "$DKIM_KEY_DIR" && opendkim-genkey -b 2048 -d "$DOMAIN" -s "$DKIM_SELECTOR" )
+  echo "Ключ DKIM сгенерирован."
+else
+  echo "Ключ DKIM уже есть — пропуск генерации"
+fi
+chown -R opendkim:opendkim /etc/opendkim/keys
+# RequireSafeKeys yes (ниже) отвергает ключ, читаемый группой или остальными.
+# После UserID opendkim демон читает ключ своим uid — группе доступ не нужен.
+chmod 700 "$DKIM_KEY_DIR"
+chmod 600 "${DKIM_KEY_DIR}/${DKIM_SELECTOR}.private"
+
+cat > /etc/opendkim.conf <<EOF
+Syslog			yes
+UMask			002
+Socket			inet:12301@localhost
+PidFile			/run/opendkim/opendkim.pid
+OversignHeaders		From
+Mode			sv
+SubDomains		no
+AutoRestart		yes
+AutoRestartRate		10/1h
+Domain			${DOMAIN}
+KeyFile			${DKIM_KEY_DIR}/${DKIM_SELECTOR}.private
+Selector		${DKIM_SELECTOR}
+UserID			opendkim
+# Штатный юнит Ubuntu не задаёт User=: привилегии сбрасывает UserID выше.
+# Демон стартует от root и сразу переходит на opendkim — владельца ключей
+# (см. chown выше). Проверка владельца ключа тогда совпадает с uid процесса,
+# и её можно оставить включённой.
+RequireSafeKeys yes
+EOF
+mkdir -p /run/opendkim
+chown opendkim:opendkim /run/opendkim
+if [[ -f /etc/default/opendkim ]] && grep -q '^SOCKET=' /etc/default/opendkim; then
+  sed -i 's|^SOCKET=.*|SOCKET="inet:12301@localhost"|' /etc/default/opendkim
+else
+  echo 'SOCKET="inet:12301@localhost"' >> /etc/default/opendkim
+fi
+systemctl enable --now opendkim >/dev/null
+systemctl restart opendkim
+
+postconf -e "milter_protocol = 6"
+postconf -e "milter_default_action = accept"
+postconf -e "smtpd_milters = inet:localhost:12301"
+postconf -e "non_smtpd_milters = inet:localhost:12301"
+# Единственный restart: и базовые postconf, и milter уже применены,
+# OpenDKIM к этому моменту включён и перезапущен.
+systemctl restart postfix
+sleep 1
+systemctl is-active --quiet postfix && echo "postfix: активен" || echo "!! postfix не активен, смотри journalctl -u postfix"
+systemctl is-active --quiet opendkim && echo "opendkim: активен" || echo "!! opendkim не активен, смотри journalctl -u opendkim"
+
+echo "== 10/11: ключ для автодеплоя из GitHub Actions =="
 # Раньше nginx/certbot: сбой выпуска сертификата не должен оставлять сервер
 # без ключа, который нужен для секрета VPS_SSH_KEY.
 ACTIONS_KEY="/home/${APP_USER}/.ssh/id_ed25519_actions"
@@ -289,7 +405,7 @@ else
   echo "Ключ для Actions уже есть — пропуск"
 fi
 
-echo "== 10/10: nginx + SSL =="
+echo "== 11/11: nginx + SSL =="
 NGINX_CONF=/etc/nginx/sites-available/site.conf
 # Конфиг пишем только если его ещё нет: certbot дописывает в этот же файл
 # server{} на 443 и редирект с 80, и повторный запуск скрипта, перезаписав
@@ -304,6 +420,8 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
 
+# Только SSH и HTTP(S). Порт 25 намеренно не открываем: Postfix слушает
+# loopback и не должен принимать почту из интернета.
 ufw allow OpenSSH >/dev/null
 ufw allow 'Nginx Full' >/dev/null
 ufw --force enable >/dev/null
@@ -332,7 +450,7 @@ else
     echo "!! Когда A-запись появится, выполни: certbot --nginx -d ${DOMAIN} --agree-tos -m ${CERTBOT_EMAIL} --redirect"
   elif [[ -n "$MATCHED_IP" ]]; then
     echo "DNS ${DOMAIN} -> ${MATCHED_IP} указывает на этот сервер, выпускаю сертификат..."
-    # Сбой certbot не обрывает скрипт: ключ Actions уже создан на шаге 9,
+    # Сбой certbot не обрывает скрипт: ключ Actions уже создан на шаге 10,
     # а сертификат можно выпустить той же командой позже.
     if ! certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$CERTBOT_EMAIL" --redirect; then
       echo "!! certbot не выпустил сертификат для ${DOMAIN}."
@@ -366,4 +484,15 @@ echo "     VPS_PORT = 22"
 # выбирает ECDSA-ключ хоста раньше Ed25519, и отпечаток любого другого
 # типа даёт "host key fingerprint mismatch".
 echo "     VPS_SSH_FINGERPRINT = $(ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub | awk '{print $2}')"
+DKIM_TXT_FILE="/etc/opendkim/keys/${DOMAIN}/${DKIM_SELECTOR}.txt"
+if [[ -f "$DKIM_TXT_FILE" ]]; then
+  echo
+  echo "DNS для исходящей почты ${DOMAIN} (TXT, одной строкой):"
+  echo "  ${DOMAIN}"
+  echo "    v=spf1 ip4:${SERVER_IP} -all"
+  echo "  ${DKIM_SELECTOR}._domainkey.${DOMAIN}"
+  echo "    $(dkim_txt_value "$DKIM_TXT_FILE")"
+  echo "  _dmarc.${DOMAIN}  (необязательно)"
+  echo "    v=DMARC1; p=none"
+fi
 echo "===================================================================="

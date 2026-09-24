@@ -36,6 +36,42 @@ http_ready() {
   fi
 }
 
+# site.db хранит smtp_password, brand_api_key, telegram_bot_token и api_key.
+# UMask=0077 в юните закрывает только файлы, созданные после рестарта;
+# на уже развёрнутом сервере БД могла остаться 0644 от umask 0022.
+# Каталог не создаём: его заводит само приложение (db.py).
+# Выравниваем только путь по умолчанию (DATABASE_PATH не задан — так
+# разворачивает setup-server.sh). БД по нестандартному пути, созданная
+# уже под UMask=0077, и так закрыта; старую — выровнять вручную.
+tighten_data_perms() {
+  local data_dir="${APP_DIR}/data"
+  if [[ ! -d "$data_dir" ]]; then
+    echo "Каталога ${data_dir} ещё нет — права выставит приложение при создании БД"
+    return 0
+  fi
+  chmod 700 "$data_dir"
+  # nullglob: нет site.db / -wal / -shm — не ошибка при set -euo pipefail.
+  local db_files=()
+  shopt -s nullglob
+  db_files=( "${data_dir}/site.db"* )
+  shopt -u nullglob
+  if [[ ${#db_files[@]} -gt 0 ]]; then
+    local db_file
+    for db_file in "${db_files[@]}"; do
+      # Пока старый процесс ещё обслуживает запросы, SQLite может удалить
+      # -wal/-shm между glob и chmod. Пропавший путь — не ошибка деплоя;
+      # отказ chmod на файле, который всё ещё есть, — настоящая ошибка.
+      if ! chmod 600 "$db_file"; then
+        if [[ -e "$db_file" ]]; then
+          echo "Не удалось выставить 600 на ${db_file}" >&2
+          return 1
+        fi
+        echo "Пропуск ${db_file}: файл исчез между списком и chmod (гонка с WAL/SHM)"
+      fi
+    done
+  fi
+}
+
 # systemctl --user без этой переменной не находит сокет шины — особенно
 # в неинтерактивном SSH из GitHub Actions, где pam её не выставляет.
 XDG_RUNTIME_DIR="/run/user/$(id -u)"
@@ -48,6 +84,9 @@ fi
 "${APP_DIR}/.venv/bin/pip" install -q --upgrade pip
 # Кавычки обязательны: иначе bash раскрывает [deploy] как glob.
 "${APP_DIR}/.venv/bin/pip" install -q -e "${APP_DIR}[deploy]"
+
+echo "== права каталога данных =="
+tighten_data_perms
 
 echo "== синхронизация systemd-юнитов =="
 UNIT_DIR="${HOME}/.config/systemd/user"

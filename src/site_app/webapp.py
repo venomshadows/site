@@ -1,11 +1,18 @@
 """Фабрика приложения и маршруты сайта."""
+import datetime as dt
 import os
+from zoneinfo import ZoneInfo
 from flask import Blueprint, Flask, Response, render_template, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from site_app.auth import login_required
 from site_app.auth_views import auth_bp
+from site_app import db
+from site_app.settings_views import settings_bp
+from site_app.api_views import api_bp
 
 _REQUIRED_ENV = ("SECRET_KEY", "AUTH_USERNAME", "AUTH_PASSWORD_HASH", "AUTH_SECOND_PASSWORD_HASH")
+_DISPLAY_TZ = ZoneInfo("Europe/Moscow")
+ROBOTS_TXT = "User-agent: *\nDisallow: /\n"
 
 
 def load_config() -> dict:
@@ -32,6 +39,11 @@ def healthz() -> Response:
     return Response("ok", mimetype="text/plain")
 
 
+@pages.get("/robots.txt")
+def robots() -> Response:
+    return Response(ROBOTS_TXT, mimetype="text/plain")
+
+
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_mapping(load_config())
@@ -48,6 +60,18 @@ def create_app(config: dict | None = None) -> Flask:
     # Доверяем адресу и схеме только одного прокси — nginx.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
+    @app.template_filter("fmt_datetime")
+    def fmt_datetime(value: str | None) -> str:
+        if not value:
+            return "—"
+        try:
+            parsed = dt.datetime.fromisoformat(value)
+        except ValueError:
+            return value
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(_DISPLAY_TZ)
+        return parsed.strftime("%d.%m.%Y %H:%M")
+
     @app.template_global()
     def static_url(filename: str) -> str:
         """Версия файла в наносекундах сбрасывает кэш после обновления."""
@@ -57,6 +81,9 @@ def create_app(config: dict | None = None) -> Flask:
             version = 0
         return url_for("static", filename=filename, v=version)
 
+    db.init_db()
+    app.register_blueprint(settings_bp)
+    app.register_blueprint(api_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(pages)
     return app
