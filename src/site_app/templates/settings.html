@@ -1,5 +1,5 @@
 {% extends "app_shell.html" %}
-{% from "_macros.html" import secret_key_panel, secret_field, csrf_field %}
+{% from "_macros.html" import key_field, key_panel, secret_field, csrf_field %}
 {% block title %}Настройки — venom_shadows site{% endblock %}
 {% block content %}
     <div class="page-header">
@@ -72,7 +72,7 @@
             <code>/start</code> — иначе Bot API не даёт написать первым.
           </p>
 
-          {{ secret_field('Токен бота', 'telegram_bot_token', settings.telegram_bot_token, '123456789:AA…') }}
+          {{ key_field('Токен бота', 'telegram_bot_token', settings.telegram_bot_token, '123456789:AA…') }}
 
           <label class="field">
             <span class="field__label">Chat ID</span>
@@ -80,11 +80,12 @@
           </label>
         </section>
 
-        {{ secret_key_panel(
+        {{ key_panel(
           'API-ключ Brand',
           'Ключ сервиса Brand для интеграции с сайтом.',
           'brand_api_key',
-          settings.brand_api_key
+          settings.brand_api_key,
+          placeholder='Ключ ещё не задан'
         ) }}
 
 

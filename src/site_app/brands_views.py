@@ -39,13 +39,13 @@ def brand_tab(brand_id: int, tab: str):
         sort, order = domains.sorting(request.args.get('sort'), request.args.get('order'))
         extra = dict(domain_rows=domains.list_tree(scope, sort, order),
                      statuses=domains.STATUSES, sorts=domains.SORTS, sort=sort, order=order,
-                     show_brand_column=False, show_history=tab == 'drops',
-                     brand_actions=tab == 'drops', brand_select_on_add=False,
+                     show_history=tab == 'drops',
+                     drop_context=tab == 'drops',
                      add_url=url_for('brands.domains_add', brand_id=brand_id, engine=tab, sort=sort, order=order),
                      bulk_url=url_for('brands.domains_bulk', brand_id=brand_id, engine=tab, sort=sort, order=order))
         if tab == 'drops':
-            extra.update(history=drops.history_for([r['id'] for r in extra['domain_rows']]),
-                         assignable_brands=brands)
+            extra.update(history=drops.history_for([r['drop_id'] for r in extra['domain_rows']], brand_id),
+                         brand_names={b['id']: b['name'] for b in brands})
     return render_brand_page(
         'brand_tab.html', brands=brands, brands_error=brands_error,
         brand=brand, brand_id=brand_id, active_tab=tab, **extra,
@@ -53,7 +53,7 @@ def brand_tab(brand_id: int, tab: str):
 
 
 def _scope(brand_id, engine):
-    return drops.brand_scope(brand_id) if engine == 'drops' else domains.brand_engine_scope(brand_id, engine)
+    return drops.brand_context_scope(brand_id) if engine == 'drops' else domains.brand_engine_scope(brand_id, engine)
 
 
 def _domain_destination(brand_id, engine):

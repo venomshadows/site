@@ -1,43 +1,11 @@
-{% from '_macros.html' import csrf_field %}
-{% macro sort_link(field, label) -%}
-  {# A newly selected column always starts descending. #}
-  {% set next_order = 'asc' if sort == field and order == 'desc' else 'desc' %}
-  {% set link_args = request.args.to_dict() %}
-  {% set _ = link_args.update(request.view_args or {}, sort=field, order=next_order) %}
-  <th scope="col"{% if sort == field %} aria-sort="{{ 'ascending' if order == 'asc' else 'descending' }}"{% endif %}><a class="domain-sort-link" href="{{ url_for(request.endpoint, **link_args) }}">{{ label }}{% if sort == field %} <span aria-hidden="true">{{ '↑' if order == 'asc' else '↓' }}</span>{% endif %}</a></th>
-{%- endmacro %}
-<form method="post" action="{{ add_url }}" class="domain-add">
-  {{ csrf_field() }}
-  <label class="field">
-    <span class="field__label">Добавить домены</span>
-    <textarea name="domains" rows="3" placeholder="example.ru, пример.рф" required aria-describedby="domain-help"></textarea>
-  </label>
-  <p class="hint" id="domain-help">Разделяйте домены пробелами, запятыми или переносами строк.</p>
-  {% if brand_select_on_add %}
-    <div class="domain-sort">
-      <label class="field">
-        <span class="field__label">Бренд (необязательно)</span>
-        <select name="brand_id"><option value="">Без бренда</option>{% for b in assignable_brands %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
-      </label>
-    </div>
-  {% endif %}
-  <button class="btn btn--primary" type="submit">Добавить</button>
-</form>
-<form method="get" class="domain-sort">
-  {% for key, value in request.args.items() if key not in ('sort', 'order') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
-  <label class="field">Сортировка
-    <select name="sort">{% for key, title in sorts.items() %}<option value="{{ key }}"{{ ' selected' if sort == key else '' }}>{{ title }}</option>{% endfor %}</select>
-  </label>
-  <label class="field">Порядок
-    <select name="order"><option value="desc"{{ ' selected' if order == 'desc' else '' }}>По убыванию</option><option value="asc"{{ ' selected' if order == 'asc' else '' }}>По возрастанию</option></select>
-  </label>
-  <button type="submit" class="btn btn--secondary">Сортировать</button>
-</form>
+{% from '_macros.html' import csrf_field, sort_link, domain_add_form, domain_sort_form, drop_history with context %}
+{{ domain_add_form(add_url) }}
+{{ domain_sort_form(sorts, sort, order) }}
 <form method="post" action="{{ bulk_url }}">
   {{ csrf_field() }}
   <div class="domain-table-wrap">
     <table class="domain-table">
-      <thead><tr><th><input type="checkbox" data-domains-all aria-label="Выбрать все"></th><th>Домен</th>{{ sort_link('status', 'Статус') }}{{ sort_link('created_at', 'Дата добавления') }}{{ sort_link('registered_at', 'Дата регистрации') }}{% if show_brand_column %}<th>Бренд</th>{% endif %}{% if show_history %}<th>История брендов</th>{% endif %}</tr></thead>
+      <thead><tr><th><input type="checkbox" data-domains-all aria-label="Выбрать все"></th><th>Домен</th>{{ sort_link('status', 'Статус', sort, order) }}{{ sort_link('created_at', 'Дата добавления', sort, order) }}{{ sort_link('registered_at', 'Дата регистрации', sort, order) }}{% if show_history %}<th>История брендов</th>{% endif %}</tr></thead>
       <tbody>
       {% for row in domain_rows %}
         <tr>
@@ -45,15 +13,12 @@
           <td><span class="domain-name{{ ' domain-name--nested' if row.depth > 0 else '' }}" style="--depth: {{ row.depth }}">{{ row.display_domain }}</span></td>
           <td><span class="domain-status {{ statuses[row.status].css }}">{{ statuses[row.status].title }}</span></td>
           <td>{{ row.created_at|fmt_datetime }}</td><td>{{ row.registered_at|fmt_datetime }}</td>
-          {% if show_brand_column %}<td>{{ brand_names.get(row.brand_id, 'Бренд #' ~ row.brand_id) if row.brand_id is not none else '—' }}</td>{% endif %}
           {% if show_history %}
-            <td>{% if history.get(row.id) %}<details><summary>История брендов</summary>
-              {% for entry in history[row.id] %}<p>{{ entry.brand_name }}: {{ entry.assigned_at|fmt_datetime }} — {{ entry.removed_at|fmt_datetime if entry.removed_at else 'по настоящее время' }}</p>{% endfor %}
-            </details>{% else %}—{% endif %}</td>
+            <td>{{ drop_history(history.get(row.drop_id, []), brand_names) }}</td>
           {% endif %}
         </tr>
       {% else %}
-        <tr><td colspan="{{ 5 + (1 if show_brand_column else 0) + (1 if show_history else 0) }}" class="hint">Список доменов пуст.</td></tr>
+        <tr><td colspan="{{ 5 + (1 if show_history else 0) }}" class="hint">Список доменов пуст.</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -67,15 +32,6 @@
       <select name="parent_id"><option value="">Выберите домен</option>{% for row in domain_rows %}<option value="{{ row.id }}">{{ row.display_domain }}</option>{% endfor %}</select>
     </label>
     <button type="submit" class="btn btn--secondary" name="action" value="status">Применить статус</button>
-    {% if brand_actions %}
-      {% set assignment_disabled = brands_error or not assignable_brands %}
-      <label class="field">Бренд
-        <select name="target_brand_id"{% if assignment_disabled %} disabled{% endif %}>{% for b in assignable_brands %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
-      </label>
-      <button type="submit" class="btn btn--secondary" name="action" value="assign_brand"{% if assignment_disabled %} disabled title="{{ brands_error or 'Нет доступных брендов' }}"{% endif %}>Присвоить бренд</button>
-      {% if assignment_disabled %}<span class="hint">{{ brands_error or 'Нет доступных брендов' }}</span>{% endif %}
-      <button type="submit" class="btn btn--secondary" name="action" value="unassign_brand">Снять бренд</button>
-    {% endif %}
-    <button type="submit" class="btn btn--danger" name="action" value="delete" data-confirm="Удалить выбранные домены?">Удалить</button>
+    <button type="submit" class="btn btn--danger" name="action" value="delete" data-confirm="{{ 'Снять выбранные домены с этого бренда?' if drop_context else 'Удалить выбранные домены?' }}">{{ 'Снять с бренда' if drop_context else 'Удалить' }}</button>
   </div>
 </form>

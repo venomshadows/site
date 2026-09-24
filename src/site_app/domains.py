@@ -61,6 +61,12 @@ class ListScope:
     unique_where_sql: str | None = None
     unique_where_params: tuple | None = None
     glue_columns: tuple = ()
+    read_table: str | None = None
+
+    @property
+    def select_table(self):
+        # JOIN нужен только для отображения; запись всегда идёт в настоящую таблицу.
+        return self.table if self.read_table is None else self.read_table
 
     @property
     def unique_sql(self):
@@ -77,30 +83,36 @@ def brand_engine_scope(brand_id, engine):
                      insert_columns={'brand_id': brand_id, 'engine': engine})
 
 
+def parse_domain_tokens(text, existing_domains):
+    """Чистый разбор ввода с прежними причинами пропуска доменов."""
+    added, skipped, seen = [], [], set()
+    for token in filter(None, re.split(r'[\s,]+', text)):
+        try:
+            domain = normalize_domain(token)
+        except DomainError as exc:
+            skipped.append((token, f'некорректный домен: {exc}'))
+            continue
+        if domain in seen:
+            skipped.append((token, 'дубликат в списке'))
+        elif domain in existing_domains:
+            skipped.append((token, 'уже есть в списке'))
+        else:
+            added.append(domain)
+        seen.add(domain)
+    return added, skipped
+
+
 def add_domains(scope, text, on_insert=None):
     """Разделяем ввод по пробелам, запятым и переносам строк вперемешку.
 
     Возвращаем добавленные канонические домены и пары (ввод, причина пропуска).
     """
-    added, skipped, seen = [], [], set()
     with _connect() as conn:
         # Блокировка до чтения защищает предварительную проверку от гонки вставок.
         conn.execute('BEGIN IMMEDIATE')
         existing = {r['domain'] for r in conn.execute(
             f'SELECT domain FROM {scope.table} WHERE {scope.unique_sql}', scope.unique_params)}
-        for token in filter(None, re.split(r'[\s,]+', text)):
-            try:
-                domain = normalize_domain(token)
-            except DomainError as exc:
-                skipped.append((token, f'некорректный домен: {exc}'))
-                continue
-            if domain in seen:
-                skipped.append((token, 'дубликат в списке'))
-            elif domain in existing:
-                skipped.append((token, 'уже есть в списке'))
-            else:
-                added.append(domain)
-            seen.add(domain)
+        added, skipped = parse_domain_tokens(text, existing)
         now = datetime.now(timezone.utc).isoformat()
         columns = [*scope.insert_columns.keys(), 'domain', 'created_at']
         conn.executemany(
@@ -119,7 +131,7 @@ def list_tree(scope, sort=None, order=None):
     sort, order = sorting(sort, order)
     with _connect() as conn:
         rows = [dict(r) for r in conn.execute(
-            f'SELECT * FROM {scope.table} WHERE {scope.where_sql}', scope.where_params)]
+            f'SELECT * FROM {scope.select_table} WHERE {scope.where_sql}', scope.where_params)]
     children = {}
     ranks = {status: rank for rank, status in enumerate(STATUSES)}
     for row in rows:
@@ -199,7 +211,7 @@ def change_status(scope, ids, status, parent_id=None):
     return len(selected)
 
 
-def delete_domains(scope, ids, before_delete=None):
+def delete_domains(scope, ids, before_delete=None, soft_delete_column: str | None = None):
     with _connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
         selected = _selected(conn, scope, ids)
@@ -210,6 +222,12 @@ def delete_domains(scope, ids, before_delete=None):
                          (*selected, *selected, *scope.where_params))
             if before_delete is not None:
                 before_delete(conn, selected)
-            conn.execute(f'DELETE FROM {scope.table} WHERE id IN ({marks}) AND {scope.where_sql}',
-                         (*selected, *scope.where_params))
+            # Мягкое удаление сохраняет историю, но отклеивает детей так же, как обычное.
+            if soft_delete_column is not None:
+                conn.execute(f'UPDATE {scope.table} SET {soft_delete_column}=? '
+                             f'WHERE id IN ({marks}) AND {scope.where_sql}',
+                             (datetime.now(timezone.utc).isoformat(), *selected, *scope.where_params))
+            else:
+                conn.execute(f'DELETE FROM {scope.table} WHERE id IN ({marks}) AND {scope.where_sql}',
+                             (*selected, *scope.where_params))
     return len(selected)

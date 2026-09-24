@@ -4,7 +4,8 @@ from site_app import db, notifications
 from site_app.auth import login_required
 
 settings_bp = Blueprint("settings", __name__)
-SECRET_FIELDS = ("smtp_password", "brand_api_key", "telegram_bot_token")
+SECRET_FIELDS = ("smtp_password",)
+VISIBLE_KEY_FIELDS = ("telegram_bot_token", "brand_api_key")
 
 
 @settings_bp.get("/settings")
@@ -67,9 +68,13 @@ def _test_result_context(channel_label: str, result: notifications.SendResult) -
 
 
 def _save_settings(form) -> None:
-    """Сохранить поля с /settings. Секретные поля — особый случай: поле в форме всегда рендерится пустым
-    (см. settings.html), поэтому пустое значение значит "не менять", а не
-    "стереть секрет"."""
+    """Сохранить поля с /settings.
+
+    Видимые telegram_bot_token и brand_api_key показывают текущее значение:
+    явно пустое поле очищает ключ, отсутствующее в POST — сохраняет его.
+    Единственный секрет smtp_password рендерится пустым: пусто = не менять,
+    очистка возможна только через чекбокс __clear.
+    """
     smtp_host = form.get("smtp_host", "").strip() or "localhost"
     try:
         smtp_port = int(form.get("smtp_port", "").strip() or "25")
@@ -91,19 +96,18 @@ def _save_settings(form) -> None:
         "smtp_from": form.get("smtp_from", "").strip(),
         "telegram_chat_id": form.get("telegram_chat_id", "").strip(),
     }
+    fields.update({name: form[name].strip() for name in VISIBLE_KEY_FIELDS if name in form})
     fields.update(_secret_field_updates(form))
     db.update_settings(**fields)
 
 
 def _secret_field_updates(form) -> dict:
+    """Обновить smtp_password: пусто = не менять, __clear = очистить.
+
+    Пробелы могут быть частью сгенерированного пароля, поэтому сохраняем
+    его без обрезки. Проверка strip() только исключает пустой ввод.
+    """
     fields = {}
-    # Пароль/ключ сохраняем как есть, БЕЗ обрезки пробелов: они могут быть
-    # частью самого секрета (случайно сгенерированный пароль, скопированный
-    # API-ключ), и срезать их без спроса значит незаметно сохранить не то
-    # значение, которым потом ничего не авторизуется. "Пусто, значит не
-    # менять" проверяем через .strip() отдельно — только чтобы случайно
-    # набранные пробелы в поле не перезаписали секрет мусором, а не чтобы
-    # обрезать реальное значение.
     for name in SECRET_FIELDS:
         value = form.get(name, "")
         # Явная очистка имеет приоритет даже при одновременно введённом новом

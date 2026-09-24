@@ -1,9 +1,70 @@
 """Доменные списки, атомарность массовых операций и защита маршрутов."""
 from unittest.mock import patch
+from dataclasses import replace
 
 import pytest
 
 from site_app import brand_client, db, domains as d
+
+
+def test_parse_domain_tokens_is_pure():
+    with patch.object(d, '_connect', side_effect=AssertionError('No database access')):
+        added, skipped = d.parse_domain_tokens('HTTPS://One.ru/path, ONE.RU old.ru invalid', {'old.ru'})
+    assert added == ['one.ru']
+    assert [reason for _, reason in skipped[:2]] == ['дубликат в списке', 'уже есть в списке']
+    assert skipped[-1][1].startswith('некорректный домен:')
+
+
+def test_read_table_only_affects_reading(app):
+    scope = d.brand_engine_scope(7, 'yandex')
+    projected = replace(scope, read_table="(SELECT domains.*, 'extra' AS marker FROM domains)")
+    assert scope.select_table == 'domains'
+    assert d.add_domains(projected, 'one.ru')[0] == ['one.ru']
+    row = d.list_tree(projected)[0]
+    assert row['marker'] == 'extra' and row['domain'] == 'one.ru'
+    assert 'marker' not in d.list_tree(scope)[0]
+    assert d.change_status(projected, [row['id']], 'used') == 1
+    assert d.list_tree(scope)[0]['status'] == 'used'
+    assert d.delete_domains(projected, [row['id']]) == 1
+    assert d.list_tree(scope) == []
+
+
+def test_soft_delete_detaches_children_and_calls_hook(tree):
+    with db._connect() as conn:
+        conn.execute('ALTER TABLE domains ADD COLUMN removed_at TEXT')
+    scope = replace(d.brand_engine_scope(7, 'yandex'),
+                    where_sql='brand_id=? AND engine=? AND removed_at IS NULL')
+    called = []
+
+    def before(conn, ids):
+        called.extend(ids)
+        row = conn.execute('SELECT * FROM domains WHERE id=?', (tree['a'],)).fetchone()
+        assert row['removed_at'] is None
+        child = conn.execute('SELECT * FROM domains WHERE id=?', (tree['b'],)).fetchone()
+        assert child['parent_id'] is None and child['status'] == 'used'
+
+    assert d.delete_domains(scope, [tree['a']], before_delete=before, soft_delete_column='removed_at') == 1
+    assert called == [tree['a']]
+    assert 'a.ru' not in {r['domain'] for r in d.list_tree(scope)}
+    with db._connect() as conn:
+        assert conn.execute('SELECT removed_at FROM domains WHERE id=?', (tree['a'],)).fetchone()[0].endswith('+00:00')
+        assert conn.execute('SELECT COUNT(*) FROM domains').fetchone()[0] == 5
+    assert d.delete_domains(scope, [tree['a']], soft_delete_column='removed_at') == 0
+    assert rows()['c.ru']['parent_id'] == tree['b']
+
+
+def test_soft_delete_hook_failure_rolls_back(tree):
+    with db._connect() as conn:
+        conn.execute('ALTER TABLE domains ADD COLUMN removed_at TEXT')
+    before = rows()
+
+    def fail(conn, ids):
+        raise RuntimeError('hook failed')
+
+    with pytest.raises(RuntimeError, match='hook failed'):
+        d.delete_domains(d.brand_engine_scope(7, 'yandex'), [tree['a']],
+                         before_delete=fail, soft_delete_column='removed_at')
+    assert rows() == before
 
 
 @pytest.mark.parametrize('raw, expected', [

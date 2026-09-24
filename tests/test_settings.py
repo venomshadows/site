@@ -1,5 +1,7 @@
 import os
+import re
 import sqlite3
+from html.parser import HTMLParser
 from unittest.mock import MagicMock
 
 import pytest
@@ -74,7 +76,70 @@ def test_settings_auth_and_no_store(client, method, path, stage, csrf_post):
         assert not response.location.endswith('/login')
 
 
-@pytest.mark.parametrize('field', ['smtp_password', 'brand_api_key', 'telegram_bot_token'])
+@pytest.mark.parametrize('field', ['brand_api_key', 'telegram_bot_token'])
+@pytest.mark.parametrize('blank', ['', '   '])
+def test_visible_keys_save_and_clear(client, login, field, blank, csrf_post):
+    login()
+    value = 'distinctive-visible-key'
+    response = csrf_post('/settings', data={field: f'  {value}  '}, follow_redirects=True)
+    assert response.status_code == 200
+    assert db.get_settings()[field] == value
+    for html in (response.text, client.get('/settings').text):
+        input_tag = re.search(rf'<input\b[^>]*name="{field}"[^>]*>', html).group(0)
+        assert 'type="text"' in input_tag
+        assert 'autocomplete="off"' in input_tag
+        assert f'value="{value}"' in input_tag
+        assert f'name="{field}__clear"' not in html
+    response = csrf_post('/settings', data={field: blank}, follow_redirects=True)
+    assert response.status_code == 200
+    assert db.get_settings()[field] == ''
+    assert value not in response.text
+    if field == 'brand_api_key':
+        input_tag = re.search(rf'<input\b[^>]*name="{field}"[^>]*>', response.text).group(0)
+        assert 'placeholder="Ключ ещё не задан"' in input_tag
+
+
+@pytest.mark.parametrize('field', ['brand_api_key', 'telegram_bot_token'])
+@pytest.mark.parametrize('quote', ["'", '"'])
+def test_visible_keys_escape_value(client, login, field, quote, csrf_post):
+    login()
+    value = f"x{quote} onload={quote}alert(1) & <b>"
+    response = csrf_post('/settings', data={field: f'  {value}  '}, follow_redirects=True)
+    assert response.status_code == 200
+    assert db.get_settings()[field] == value
+
+    class InputParser(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            if tag == 'input' and dict(attrs).get('name') == field:
+                self.attrs = dict(attrs)
+
+    for html in (response.text, client.get('/settings').text):
+        input_tag = re.search(rf'<input\b[^>]*name="{field}"[^>]*>', html).group(0)
+        escaped_quote = '&#39;' if quote == "'" else '&#34;'
+        assert f'value="x{escaped_quote} onload={escaped_quote}alert(1) &amp; &lt;b&gt;"' in input_tag
+        parser = InputParser()
+        parser.feed(html)
+        assert parser.attrs['value'] == value
+        assert 'onload' not in parser.attrs
+
+
+@pytest.mark.parametrize('path', ['/settings', '/settings/test-email', '/settings/test-telegram'])
+def test_missing_visible_keys_preserve_values(client, login, monkeypatch, csrf_post, path):
+    login()
+    stored = {'brand_api_key': 'saved-brand-key', 'telegram_bot_token': 'saved-bot-token'}
+    db.update_settings(**stored)
+    for sender in ('send_email', 'send_telegram'):
+        monkeypatch.setattr(notifications, sender, MagicMock(return_value=notifications.SendResult(ok=True)))
+    response = csrf_post(path, data={'notify_email': 'updated@example.com'}, follow_redirects=True)
+    assert response.status_code == 200
+    settings = db.get_settings()
+    assert settings['notify_email'] == 'updated@example.com'
+    for field, value in stored.items():
+        assert settings[field] == value
+        assert f'value="{value}"' in response.text
+
+
+@pytest.mark.parametrize('field', ['smtp_password'])
 def test_secret_preservation(client, login, field, csrf_post):
     login()
     secret = '  distinctive-secret  '
@@ -88,7 +153,7 @@ def test_secret_preservation(client, login, field, csrf_post):
     assert 'API-ключ сайта' in response.text
 
 
-@pytest.mark.parametrize('field', ['smtp_password', 'brand_api_key', 'telegram_bot_token'])
+@pytest.mark.parametrize('field', ['smtp_password'])
 @pytest.mark.parametrize('replacement', ['', 'new-secret'])
 def test_secret_explicit_clear(client, login, field, replacement, csrf_post):
     login()
@@ -197,7 +262,7 @@ def test_telegram_form_saves_and_sends(client, login, monkeypatch, csrf_post):
     assert '&lt;b&gt;denied&lt;/b&gt;' in response.text
 
 
-def test_telegram_failure_does_not_expose_token(client, login, monkeypatch, csrf_post):
+def test_telegram_failure_redacts_token_in_error(client, login, monkeypatch, csrf_post):
     login()
     token = '123456:ABC-DEF'
     csrf_post('/settings', data={'telegram_bot_token': token})
@@ -206,10 +271,12 @@ def test_telegram_failure_does_not_expose_token(client, login, monkeypatch, csrf
     ))
     monkeypatch.setattr(notifications.requests, 'post', post)
     response = csrf_post('/settings/test-telegram', data={
-        'telegram_bot_token': '', 'telegram_chat_id': '42',
+        'telegram_bot_token': token, 'telegram_chat_id': '42',
     })
     assert response.status_code == 200
-    assert token not in response.text
+    error = re.search(r'<div class="result result--error">(.*?)</div>', response.text, re.S).group(1)
+    assert token not in error
     assert '/bot&lt;redacted&gt;/sendMessage' in response.text
     assert db.get_settings()['telegram_bot_token'] == token
-    assert token not in client.get('/settings').text
+    assert f'value="{token}"' in response.text
+    assert f'value="{token}"' in client.get('/settings').text

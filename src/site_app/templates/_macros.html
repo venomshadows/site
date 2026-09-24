@@ -33,15 +33,26 @@
   </div>
 {%- endmacro %}
 
-{% macro secret_key_panel(title, hint, field_name, has_value) -%}
+{# Видимое поле ключа или токена: значение всегда показывается (решение
+   пользователя), пустая отправка его стирает. Одна разметка для всех таких
+   полей на /settings. #}
+{% macro key_field(label, field_name, value, placeholder='') -%}
+  <label class="field">
+    <span class="field__label">{{ label }}</span>
+    <span class="api-key-row">
+      <input type="text" name="{{ field_name }}" value="{{ value or '' }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %} autocomplete="off">
+    </span>
+  </label>
+{%- endmacro %}
+
+{% macro key_panel(title, hint, field_name, value, placeholder='') -%}
   <section class="panel settings-section">
     <h2 class="settings-section__title">{{ title }}</h2>
     <p class="settings-section__hint">
       {{ hint }}
-      {% if has_value %}Уже сохранён — оставь поле пустым, чтобы не менять его.{% endif %}
     </p>
 
-    {{ secret_field('API-ключ', field_name, has_value) }}
+    {{ key_field('API-ключ', field_name, value, placeholder) }}
   </section>
 {%- endmacro %}
 
@@ -52,4 +63,49 @@
 {% macro brand_error_panel(reason) -%}
   <h1 class="page__title">Brand недоступен</h1>
   <p class="page__lead">{{ reason }}</p>
+{%- endmacro %}
+
+{% macro sort_link(field, label, sort, order) -%}
+  {# A newly selected column always starts descending. #}
+  {% set next_order = 'asc' if sort == field and order == 'desc' else 'desc' %}
+  {% set link_args = request.args.to_dict() %}
+  {% set _ = link_args.update(request.view_args or {}, sort=field, order=next_order) %}
+  <th scope="col"{% if sort == field %} aria-sort="{{ 'ascending' if order == 'asc' else 'descending' }}"{% endif %}><a class="domain-sort-link" href="{{ url_for(request.endpoint, **link_args) }}">{{ label }}{% if sort == field %} <span aria-hidden="true">{{ '↑' if order == 'asc' else '↓' }}</span>{% endif %}</a></th>
+{%- endmacro %}
+
+{% macro domain_add_form(add_url, brands=(), select_brands=false) -%}
+<form method="post" action="{{ add_url }}" class="domain-add">
+  {{ csrf_field() }}
+  <label class="field">
+    <span class="field__label">Добавить домены</span>
+    <textarea name="domains" rows="3" placeholder="example.ru, пример.рф" required aria-describedby="domain-help"></textarea>
+  </label>
+  <p class="hint" id="domain-help">Разделяйте домены пробелами, запятыми или переносами строк.</p>
+  {% if select_brands %}
+    <fieldset><legend>Бренды (необязательно)</legend>
+      <p class="hint">Ничего не выбирайте, чтобы добавить без брендов.</p>
+      {% for b in brands %}<label class="field field--checkbox"><input type="checkbox" name="brand_ids" value="{{ b.id }}"><span>{{ b.name }}</span></label>{% endfor %}
+    </fieldset>
+  {% endif %}
+  <button class="btn btn--primary" type="submit">Добавить</button>
+</form>
+{%- endmacro %}
+
+{% macro domain_sort_form(sorts, sort, order) -%}
+<form method="get" class="domain-sort">
+  {% for key, value in request.args.items() if key not in ('sort', 'order') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+  <label class="field">Сортировка
+    <select name="sort">{% for key, title in sorts.items() %}<option value="{{ key }}"{{ ' selected' if sort == key else '' }}>{{ title }}</option>{% endfor %}</select>
+  </label>
+  <label class="field">Порядок
+    <select name="order"><option value="desc"{{ ' selected' if order == 'desc' else '' }}>По убыванию</option><option value="asc"{{ ' selected' if order == 'asc' else '' }}>По возрастанию</option></select>
+  </label>
+  <button type="submit" class="btn btn--secondary">Сортировать</button>
+</form>
+{%- endmacro %}
+
+{% macro drop_history(entries, brand_names) -%}
+  {% if entries %}<details><summary>История брендов</summary>
+    {% for entry in entries %}<p>{{ entry.brand_name if entry.removed_at else brand_names.get(entry.brand_id, 'Бренд #' ~ entry.brand_id) }}: {{ entry.assigned_at|fmt_datetime }} — {{ entry.removed_at|fmt_datetime if entry.removed_at else 'по настоящее время' }}</p>{% endfor %}
+  </details>{% else %}—{% endif %}
 {%- endmacro %}
