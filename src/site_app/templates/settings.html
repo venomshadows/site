@@ -1,5 +1,7 @@
 {% extends "app_shell.html" %}
-{% from "_macros.html" import key_field, key_panel, secret_field, csrf_field %}
+{% from "_macros.html" import key_field, secret_field, csrf_field, settings_header, settings_actions %}
+{% set nav_active = "settings" %}
+{% block page_class %}page page--settings{% endblock %}
 {% block title %}Настройки — venom_shadows site{% endblock %}
 {% block content %}
     <div class="page-header">
@@ -19,11 +21,12 @@
       </div>
     {% endif %}
 
-    <form method="post" action="{{ url_for('settings.settings_save') }}" autocomplete="off">
-      {{ csrf_field() }}
-      <div class="settings-grid">
-        <section class="panel settings-section">
-          <h2 class="settings-section__title">Email-уведомления</h2>
+    <div class="settings-stack">
+      <section class="panel settings-section" aria-labelledby="settings-email-title">
+        <form method="post" action="{{ url_for('settings.settings_save') }}" autocomplete="off">
+          {{ csrf_field() }}
+          <input type="hidden" name="section" value="email">
+          {{ settings_header('settings-email-title', 'Email-уведомления', settings.notify_email) }}
           <p class="settings-section__hint">
             Отправка через SMTP, настроенный ниже — по умолчанию локальный сервер (localhost:25) без
             авторизации, можно указать и внешний SMTP с логином/паролем и STARTTLS.
@@ -37,7 +40,7 @@
           <div class="field-row">
             <label class="field">
               <span class="field__label">SMTP-сервер</span>
-              <input type="text" name="smtp_host" placeholder="localhost" value="{{ settings.smtp_host or 'localhost' }}">
+              <input type="text" name="smtp_host" placeholder="localhost" value="{{ settings.smtp_host }}">
             </label>
             <label class="field">
               <span class="field__label">Порт</span>
@@ -62,10 +65,15 @@
             <input type="checkbox" name="smtp_use_tls" value="1" {{ 'checked' if settings.smtp_use_tls }}>
             <span class="field__label">Использовать STARTTLS</span>
           </label>
-        </section>
 
-        <section class="panel settings-section">
-          <h2 class="settings-section__title">Telegram-бот</h2>
+          {{ settings_actions('settings.settings_test_email', 'Сохранить и отправить тестовое письмо') }}
+        </form>
+      </section>
+      <section class="panel settings-section" aria-labelledby="settings-telegram-title">
+        <form method="post" action="{{ url_for('settings.settings_save') }}" autocomplete="off">
+          {{ csrf_field() }}
+          <input type="hidden" name="section" value="telegram">
+          {{ settings_header('settings-telegram-title', 'Telegram-бот', settings.telegram_bot_token and settings.telegram_chat_id) }}
           <p class="settings-section__hint">
             Обычный Bot API. Токен получаешь у @BotFather, а chat_id — у того чата/пользователя,
             который должен получать уведомления; получателю нужно один раз самому написать боту
@@ -78,29 +86,22 @@
             <span class="field__label">Chat ID</span>
             <input type="text" name="telegram_chat_id" placeholder="например, 123456789" value="{{ settings.telegram_chat_id or '' }}">
           </label>
-        </section>
 
-        {{ key_panel(
-          'API-ключ Brand',
-          'Ключ сервиса Brand для интеграции с сайтом.',
-          'brand_api_key',
-          settings.brand_api_key,
-          placeholder='Ключ ещё не задан'
-        ) }}
-
-
-      </div>
-
-      <div class="settings-actions">
-        <button type="submit" class="btn btn--primary">Сохранить</button>
-        <button type="submit" formaction="{{ url_for('settings.settings_test_email') }}" class="btn btn--secondary">Отправить тестовое письмо</button>
-        <button type="submit" formaction="{{ url_for('settings.settings_test_telegram') }}" class="btn btn--secondary">Отправить тестовое сообщение в Telegram</button>
-      </div>
-    </form>
-
-
-    <section class="panel settings-section">
-      <h2 class="settings-section__title">API-ключ сайта</h2>
+          {{ settings_actions('settings.settings_test_telegram', 'Сохранить и отправить тест в Telegram') }}
+        </form>
+      </section>
+      <section class="panel settings-section" aria-labelledby="settings-brand-title">
+        <form method="post" action="{{ url_for('settings.settings_save') }}" autocomplete="off">
+          {{ csrf_field() }}
+          <input type="hidden" name="section" value="brand">
+          {{ settings_header('settings-brand-title', 'API-ключ Brand', settings.brand_api_key, 'Ключ не задан') }}
+          <p class="settings-section__hint">Ключ сервиса Brand для интеграции с сайтом.</p>
+          {{ key_field('API-ключ', 'brand_api_key', settings.brand_api_key, 'Ключ ещё не задан') }}
+          {{ settings_actions() }}
+        </form>
+      </section>
+    <section class="panel settings-section" aria-labelledby="settings-api-title">
+      {{ settings_header('settings-api-title', 'API-ключ сайта', settings.api_key, 'Ключ не задан') }}
       <p class="settings-section__hint">Передавай ключ в заголовке <code>Authorization: Bearer &lt;ключ&gt;</code> или <code>X-API-Key</code>. Проверка доступа: <code>GET /api/v1/ping</code>. Генерация нового ключа сразу отзывает предыдущий.</p>
       {% if settings.api_key %}
         <label class="field" for="api-key-value"><span class="field__label">Активный ключ (создан {{ settings.api_key_created_at | fmt_datetime }})</span></label>
@@ -124,4 +125,5 @@
         {% endif %}
       </div>
     </section>
+    </div>
 {% endblock %}

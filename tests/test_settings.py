@@ -234,6 +234,7 @@ def test_email_form_saves_and_sends(client, login, monkeypatch, csrf_post):
     smtp = MagicMock()
     monkeypatch.setattr(notifications.smtplib, 'SMTP', smtp)
     response = csrf_post('/settings/test-email', data={
+        'section': 'email',
         'notify_email': 'recipient@example.com', 'smtp_host': 'smtp.example.com',
         'smtp_port': '587', 'smtp_use_tls': '1', 'smtp_username': 'user', 'smtp_password': 'pass',
     })
@@ -241,6 +242,7 @@ def test_email_form_saves_and_sends(client, login, monkeypatch, csrf_post):
     smtp.assert_called_once_with('smtp.example.com', 587, timeout=10)
     smtp.return_value.__enter__.return_value.login.assert_called_once_with('user', 'pass')
     assert db.get_settings()['notify_email'] == 'recipient@example.com'
+    smtp.return_value.__enter__.return_value.starttls.assert_called_once()
     smtp.side_effect = OSError('SMTP unavailable')
     response = csrf_post('/settings/test-email', data={'notify_email': 'a@example.com'})
     assert response.status_code == 200 and 'SMTP unavailable' in response.text

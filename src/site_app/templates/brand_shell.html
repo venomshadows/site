@@ -1,12 +1,6 @@
 {% extends 'app_shell.html' %}
-{% from '_macros.html' import account_links, engine_logo %}
-{% block topbar_class %}topbar topbar--wide{% endblock %}
-{% block topbar_leading %}
-    <button type="button" class="burger" aria-label="Меню: бренды" aria-expanded="false"
-            aria-controls="sidebar" data-sidebar-toggle>
-      <span class="burger__line"></span><span class="burger__line"></span><span class="burger__line"></span>
-    </button>
-{% endblock %}
+{% from '_macros.html' import engine_logo %}
+{% set nav_active = "brands" %}
 {% block page_body %}
   <div class="sidebar-backdrop" data-sidebar-close hidden></div>
 
@@ -35,8 +29,6 @@
           {% endif %}
         {% endfor %}
       </ul>
-      {#- На узком экране кнопки из шапки живут здесь (в шапке они скрыты). #}
-      <div class="sidebar__account">{{ account_links() }}</div>
     </aside>
 
     <main class="content">

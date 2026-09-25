@@ -70,35 +70,39 @@ def _test_result_context(channel_label: str, result: notifications.SendResult) -
 def _save_settings(form) -> None:
     """Сохранить поля с /settings.
 
-    Видимые telegram_bot_token и brand_api_key показывают текущее значение:
-    явно пустое поле очищает ключ, отсутствующее в POST — сохраняет его.
+    Все обычные поля обновляются только при наличии в POST: явно пустое
+    значение очищает поле, отсутствующее — сохраняет его. Чекбокс TLS
+    обновляется только с маркером Email-формы; пустой SMTP-хост и неверный порт
+    получают значения по умолчанию localhost и 25.
     Единственный секрет smtp_password рендерится пустым: пусто = не менять,
     очистка возможна только через чекбокс __clear.
     """
-    smtp_host = form.get("smtp_host", "").strip() or "localhost"
-    try:
-        smtp_port = int(form.get("smtp_port", "").strip() or "25")
-    except ValueError:
-        smtp_port = 25
-    # SQLite INTEGER не резиновый: значение вне диапазона портов (в том
-    # числе абсурдно большое число, введённое в поле типа number руками
-    # или через прямой POST мимо валидации браузера) роняло бы сохранение
-    # OverflowError'ом. Не в диапазоне — считаем как нечисловой ввод.
-    if not 1 <= smtp_port <= 65535:
-        smtp_port = 25
-
+    plain_fields = (
+        "notify_email", "smtp_username", "smtp_from",
+        "telegram_chat_id", *VISIBLE_KEY_FIELDS,
+    )
     fields: dict[str, object] = {
-        "notify_email": form.get("notify_email", "").strip(),
-        "smtp_host": smtp_host,
-        "smtp_port": smtp_port,
-        "smtp_username": form.get("smtp_username", "").strip(),
-        "smtp_use_tls": 1 if form.get("smtp_use_tls") else 0,
-        "smtp_from": form.get("smtp_from", "").strip(),
-        "telegram_chat_id": form.get("telegram_chat_id", "").strip(),
+        name: form[name].strip() for name in plain_fields if name in form
     }
-    fields.update({name: form[name].strip() for name in VISIBLE_KEY_FIELDS if name in form})
+    fields.update(_email_default_updates(form))
+    if form.get("section") == "email":
+        fields["smtp_use_tls"] = 1 if form.get("smtp_use_tls") else 0
     fields.update(_secret_field_updates(form))
     db.update_settings(**fields)
+
+
+def _email_default_updates(form) -> dict:
+    """Normalize submitted Email defaults without changing omitted fields."""
+    fields = {}
+    if "smtp_host" in form:
+        fields["smtp_host"] = form["smtp_host"].strip() or "localhost"
+    if "smtp_port" in form:
+        try:
+            port = int(form["smtp_port"].strip())
+        except ValueError:
+            port = 25
+        fields["smtp_port"] = port if 1 <= port <= 65535 else 25
+    return fields
 
 
 def _secret_field_updates(form) -> dict:

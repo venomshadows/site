@@ -5,14 +5,6 @@
 {% macro brand_logo() -%}
   <img class="brand-logo" src="{{ static_url('img/logo.webp') }}" width="800" height="333" alt="venom_shadows site">
 {%- endmacro %}
-{% macro account_links() -%}
-  <a href="{{ url_for('drops.drops_index') }}" class="btn-link">Дропы</a>
-  <a href="{{ url_for('settings.settings_page') }}" class="btn-link">Настройки</a>
-  <form method="post" action="{{ url_for('auth.logout') }}">
-    {{ csrf_field() }}
-    <button type="submit" class="btn-link">Выйти</button>
-  </form>
-{%- endmacro %}
 
 {% macro secret_field(label, field_name, has_value, empty_placeholder='Ключ ещё не задан') -%}
   <div class="field">
@@ -39,22 +31,10 @@
 {% macro key_field(label, field_name, value, placeholder='') -%}
   <label class="field">
     <span class="field__label">{{ label }}</span>
-    <span class="api-key-row">
-      <input type="text" name="{{ field_name }}" value="{{ value or '' }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %} autocomplete="off">
-    </span>
+    <input type="text" name="{{ field_name }}" value="{{ value or '' }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %} autocomplete="off">
   </label>
 {%- endmacro %}
 
-{% macro key_panel(title, hint, field_name, value, placeholder='') -%}
-  <section class="panel settings-section">
-    <h2 class="settings-section__title">{{ title }}</h2>
-    <p class="settings-section__hint">
-      {{ hint }}
-    </p>
-
-    {{ key_field('API-ключ', field_name, value, placeholder) }}
-  </section>
-{%- endmacro %}
 
 {% macro engine_logo(source) -%}
   <img class="engine-logo" src="{{ static_url('img/' ~ source ~ '.svg') }}" alt="" width="20" height="20">
@@ -108,4 +88,18 @@
   {% if entries %}<details><summary>История брендов</summary>
     {% for entry in entries %}<p>{{ entry.brand_name if entry.removed_at else brand_names.get(entry.brand_id, 'Бренд #' ~ entry.brand_id) }}: {{ entry.assigned_at|fmt_datetime }} — {{ entry.removed_at|fmt_datetime if entry.removed_at else 'по настоящее время' }}</p>{% endfor %}
   </details>{% else %}—{% endif %}
+{%- endmacro %}
+
+{% macro settings_header(id, title, configured, empty='Не настроено') -%}
+  <div class="settings-section__head">
+    <h2 class="settings-section__title" id="{{ id }}">{{ title }}</h2>
+    <span class="state-marker{{ ' state-marker--on' if configured }}"><span class="state-marker__dot" aria-hidden="true"></span>{{ 'Настроено' if configured else empty }}</span>
+  </div>
+{%- endmacro %}
+
+{% macro settings_actions(test_endpoint=None, test_label=None) -%}
+  <div class="settings-actions">
+    <button type="submit" class="btn btn--primary">Сохранить</button>
+    {% if test_endpoint %}<button type="submit" formaction="{{ url_for(test_endpoint) }}" class="btn btn--secondary">{{ test_label }}</button>{% endif %}
+  </div>
 {%- endmacro %}

@@ -1,0 +1,25 @@
+{% from "_macros.html" import brand_logo, csrf_field %}
+<header class="topbar">
+  {% if nav_active == "brands" %}
+    <button type="button" class="burger" aria-label="Меню: бренды" aria-expanded="false"
+            aria-controls="sidebar" data-sidebar-toggle>
+      <span class="burger__line"></span><span class="burger__line"></span><span class="burger__line"></span>
+    </button>
+  {% endif %}
+  <a href="{{ url_for('pages.index') }}" class="topbar__brand" aria-label="venom_shadows site — к списку брендов">
+    {{ brand_logo() }}
+  </a>
+  <nav class="topbar__nav" aria-label="Основная навигация">
+    {% for key, endpoint, label in (
+      ("brands", "pages.index", "Бренды"),
+      ("drops", "drops.drops_index", "Дропы"),
+      ("settings", "settings.settings_page", "Настройки"),
+    ) %}
+      <a href="{{ url_for(endpoint) }}" class="topbar__tab{{ ' topbar__tab--active' if nav_active == key }}"{% if nav_active == key %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <form method="post" action="{{ url_for('auth.logout') }}" class="topbar__logout">
+    {{ csrf_field() }}
+    <button type="submit" class="topbar__logout-btn">Выйти</button>
+  </form>
+</header>
