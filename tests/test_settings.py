@@ -87,7 +87,6 @@ def test_visible_keys_save_and_clear(client, login, field, blank, csrf_post):
     for html in (response.text, client.get('/settings').text):
         input_tag = re.search(rf'<input\b[^>]*name="{field}"[^>]*>', html).group(0)
         assert 'type="text"' in input_tag
-        assert 'autocomplete="off"' in input_tag
         assert f'value="{value}"' in input_tag
         assert f'name="{field}__clear"' not in html
     response = csrf_post('/settings', data={field: blank}, follow_redirects=True)

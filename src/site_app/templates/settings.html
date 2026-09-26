@@ -6,28 +6,28 @@
   {% if saved %}{{ ui.banner('success', 'Настройки обновлены.') }}{% endif %}
   {% if test_result %}{{ ui.banner('success' if test_result.ok else 'error', test_result.channel_label ~ ': ' ~ test_result.message) }}{% endif %}
   <div class="settings-stack">
-    {% call ui.settings_section('email', 'Email-уведомления', settings.notify_email, action=url_for('settings.settings_save'), hint='Отправка через SMTP: локальный сервер localhost:25 или внешний сервер с авторизацией и STARTTLS.') %}
+    {% call ui.settings_section('email', 'Email-уведомления', settings.notify_email, action=url_for('settings.settings_save'), form_attrs={'autocomplete': 'off'}, hint='Отправка через SMTP: локальный сервер localhost:25 или внешний сервер с авторизацией и STARTTLS.') %}
       <div class="field-grid">
-        {{ ui.field('notify_email', 'Email для уведомлений', settings.notify_email, type='email', placeholder='admin@example.com', attrs={'autocomplete': 'off'}) }}
-        {{ ui.field('smtp_host', 'SMTP-сервер', settings.smtp_host, placeholder='localhost', attrs={'autocomplete': 'off'}) }}
-        {{ ui.field('smtp_port', 'Порт', settings.smtp_port or 25, type='number', attrs={'min': 1, 'max': 65535, 'autocomplete': 'off'}) }}
-        {{ ui.field('smtp_username', 'Логин SMTP (необязательно)', settings.smtp_username, placeholder='без авторизации, если пусто', attrs={'autocomplete': 'off'}) }}
+        {{ ui.field('notify_email', 'Email для уведомлений', settings.notify_email, type='email', placeholder='admin@example.com') }}
+        {{ ui.field('smtp_host', 'SMTP-сервер', settings.smtp_host, placeholder='localhost') }}
+        {{ ui.field('smtp_port', 'Порт', settings.smtp_port or 25, type='number', attrs={'min': 1, 'max': 65535}) }}
+        {{ ui.field('smtp_username', 'Логин SMTP (необязательно)', settings.smtp_username, placeholder='без авторизации, если пусто') }}
         {{ ui.secret_field('smtp_password', 'Пароль SMTP', has_smtp_password, clearable=true) }}
-        {{ ui.field('smtp_from', 'Адрес отправителя (необязательно)', settings.smtp_from, placeholder='site@site.venomshadows.ru', attrs={'autocomplete': 'off'}) }}
+        {{ ui.field('smtp_from', 'Адрес отправителя (необязательно)', settings.smtp_from, placeholder='site@site.venomshadows.ru') }}
       </div>
-      {{ ui.checkbox('smtp_use_tls', 'Использовать STARTTLS', settings.smtp_use_tls, attrs={'autocomplete': 'off'}) }}
+      {{ ui.checkbox('smtp_use_tls', 'Использовать STARTTLS', settings.smtp_use_tls) }}
       {{ ui.settings_actions(test_label='Сохранить и отправить тестовое письмо', test_action=url_for('settings.settings_test_email')) }}
     {% endcall %}
-    {% call ui.settings_section('telegram', 'Telegram-бот', settings.telegram_bot_token and settings.telegram_chat_id, action=url_for('settings.settings_save'), hint='Токен выдаёт @BotFather. Получатель должен один раз написать боту /start.') %}
+    {% call ui.settings_section('telegram', 'Telegram-бот', settings.telegram_bot_token and settings.telegram_chat_id, action=url_for('settings.settings_save'), form_attrs={'autocomplete': 'off'}, hint='Токен выдаёт @BotFather. Получатель должен один раз написать боту /start.') %}
       <div class="field-grid">
-        {{ ui.field('telegram_bot_token', 'Токен бота', settings.telegram_bot_token, placeholder='123456789:AA…', attrs={'autocomplete': 'off'}) }}
-        {{ ui.field('telegram_chat_id', 'Chat ID', settings.telegram_chat_id, placeholder='например, 123456789', attrs={'autocomplete': 'off'}) }}
+        {{ ui.field('telegram_bot_token', 'Токен бота', settings.telegram_bot_token, placeholder='123456789:AA…') }}
+        {{ ui.field('telegram_chat_id', 'Chat ID', settings.telegram_chat_id, placeholder='например, 123456789') }}
       </div>
       {{ ui.settings_actions(test_label='Сохранить и отправить тест в Telegram', test_action=url_for('settings.settings_test_telegram')) }}
     {% endcall %}
-    {% call ui.settings_section('brand', 'API-ключ Brand', settings.brand_api_key, marker_off_text='Ключ не задан', action=url_for('settings.settings_save'), hint='Ключ сервиса Brand для интеграции с сайтом.') %}
+    {% call ui.settings_section('brand', 'API-ключ Brand', settings.brand_api_key, marker_off_text='Ключ не задан', action=url_for('settings.settings_save'), form_attrs={'autocomplete': 'off'}, hint='Ключ сервиса Brand для интеграции с сайтом.') %}
       <div class="field-grid">
-        {{ ui.field('brand_api_key', 'API-ключ', settings.brand_api_key, placeholder='Ключ ещё не задан', attrs={'autocomplete': 'off'}) }}
+        {{ ui.field('brand_api_key', 'API-ключ', settings.brand_api_key, placeholder='Ключ ещё не задан') }}
       </div>
       {{ ui.settings_actions() }}
     {% endcall %}

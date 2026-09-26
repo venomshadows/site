@@ -11,14 +11,23 @@ class Controls(HTMLParser):
         super().__init__()
         self.fields = {}
         self.ids = set()
+        self.form_attrs = {}
         self.feed(html)
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if tag == 'form':
+            self.form_attrs = attrs
         if 'id' in attrs:
             self.ids.add(attrs['id'])
         if tag in ('input', 'textarea', 'select') and 'name' in attrs:
+            if 'autocomplete' not in attrs and 'autocomplete' in self.form_attrs:
+                attrs['autocomplete'] = self.form_attrs['autocomplete']
             self.fields[attrs['name']] = attrs
+
+    def handle_endtag(self, tag):
+        if tag == 'form':
+            self.form_attrs = {}
 
 
 @pytest.mark.parametrize('path,stage,expected', [
