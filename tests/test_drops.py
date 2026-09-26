@@ -452,9 +452,10 @@ def test_registry_sort_and_none(app, sort, order):
 @pytest.mark.parametrize('brand, title', [('all', 'все'), ('none', 'без бренда'), ('7', 'Первый')])
 def test_add_redirect_preserves_current_filter(client, login, csrf_post, brand, title):
     login()
-    response = csrf_post(f'/drops/domains?brand={brand}&sort=registered_at&order=asc',
+    response = csrf_post(f'/drops/domains?brand={brand}&sort=registered_at&dir=asc',
                          data={'domains': 'one.ru', 'brand_ids': ['7', '8']})
-    assert response.location == f'/drops?brand={brand}&sort=registered_at&order=asc'
+    brand_param = f'brand={brand}&' if brand != 'all' else ''
+    assert response.location == f'/drops?{brand_param}sort=registered_at&dir=asc'
     page = client.get(response.location)
     assert f'Дропы — {title}' in page.text
     assert 'id="sidebar"' not in page.text
@@ -498,9 +499,10 @@ def test_registry_badges_live_names_and_closed_snapshots(client, login, brands):
     page = client.get('/drops').text
     assert 'Историческое имя' in page and 'Живое имя' in page and 'Бренд #8' in page
     assert 'Снимок активного' not in page and 'Снимок второго' not in page
-    assert 'domain-status--used' in page and '<details>' in page
+    assert 'pill--danger' in page and '<details class="domain-history">' in page
     assert 'по настоящее время' in page
-    assert 'name="status"' not in page and 'name="parent_id"' not in page
+    assert 'data-chip-group="status"' in page and 'name="parent_id"' not in page
+    assert '<select name="status"' not in page
     assert 'value="status"' not in page
     assert 'data-confirm="Удалить выбранные домены и всю историю во всех брендах?"' in page
     assert 'name="remove_brand_ids" value="8"' in page
@@ -531,7 +533,7 @@ def test_index_filters(client, login, brand, expected):
     add('second.ru', TARGETS[1:])
     add('free.ru')
     login()
-    body = client.get('/drops?brand=' + brand).text.split('<tbody>')[1].split('</tbody>')[0]
+    body = client.get('/drops?brand=' + brand, follow_redirects=True).text.split('<tbody>')[1].split('</tbody>')[0]
     for name in ('first.ru', 'second.ru', 'free.ru'):
         assert (name in body) == (name in expected)
 
@@ -586,10 +588,10 @@ def test_context_remove_and_repeat_report(client, login, csrf_post, path):
 def test_registry_bulk_reports_and_full_delete(client, login, csrf_post):
     item = add()
     login()
-    path = '/drops/domains/bulk?brand=all&sort=registered_at&order=asc'
+    path = '/drops/domains/bulk?brand=all&sort=registered_at&dir=asc'
     for already in (0, 1):
         response = csrf_post(path, data={'ids': [item], 'action': 'assign_brands', 'target_brand_ids': ['7', '8']})
-        assert response.location == '/drops?brand=all&sort=registered_at&order=asc'
+        assert response.location == '/drops?sort=registered_at&dir=asc'
         page = client.get(response.location).text
         for name in ('Первый', 'Второй'):
             assert f'{name}: присвоен {1 - already} доменам, уже были в бренде: {already}' in page

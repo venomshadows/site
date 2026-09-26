@@ -1,17 +1,8 @@
 {% extends 'brand_shell.html' %}
-{% from '_macros.html' import brand_error_panel %}
 {% block title %}{{ tabs[active_tab].title if brand else 'Brand недоступен' }} — venom_shadows site{% endblock %}
 {% block tab_content %}
-  <div class="panel">
-    {% if brand %}
-      <h1 class="page__title">{{ tabs[active_tab].title }}</h1>
-      {% if tabs[active_tab].domains %}
-        {% include '_domains.html' %}
-      {% else %}
-        <p class="page__lead">Раздел в разработке.</p>
-      {% endif %}
-    {% else %}
-      {{ brand_error_panel(brands_error) }}
-    {% endif %}
-  </div>
+  {% if brand %}
+    {{ ui.page_header(tabs[active_tab].title) }}
+    {% include '_domains.html' %}
+  {% else %}{{ ui.empty_state('Brand недоступен', brands_error) }}{% endif %}
 {% endblock %}

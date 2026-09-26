@@ -1,7 +1,7 @@
 """Реестр дропов и дерево использования внутри выбранного бренда."""
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
-from site_app import brand_client, domains, drops
+from site_app import brand_client, domains, drops, list_views
 from site_app.auth import login_required
 from site_app.domain_forms import (add_from_form, bulk_from_form, flash_added, flash_brand_report,
                                    form_brand_ids, resolve_targets, brand_names)
@@ -9,50 +9,46 @@ from site_app.domain_forms import (add_from_form, bulk_from_form, flash_added, f
 drops_bp = Blueprint('drops', __name__)
 
 
-def _parse_brand_filter(raw):
-    if raw == 'none':
-        return 'none'
-    if raw and raw.isascii() and raw.isdigit() and len(raw) <= 19:
-        value = int(raw)
-        if 0 < value <= 9223372036854775807:
-            return value
-    return 'all'
-
-
 def _query():
-    brand = _parse_brand_filter(request.args.get('brand'))
-    sort, order = domains.sorting(request.args.get('sort'), request.args.get('order'))
-    if not isinstance(brand, int) and sort not in drops.REGISTRY_SORTS:
-        sort = 'created_at'
-    return dict(brand=brand, sort=sort, order=order)
+    return list_views.query(include_brand=True)
+
+
+def _context_page(brand, query):
+    rows = drops.list_tree(drops.brand_context_scope(brand), query['sort'], query['dir'])
+    return dict(**domains.list_filters(rows, query.get('q', ''), query.get('status', '')),
+                history=drops.history_for([row['drop_id'] for row in rows], brand))
+
+
+def _registry_page(brand, query, names):
+    rows = drops.registry(brand, query['sort'], query['dir'])
+    ids = [row['id'] for row in rows]
+    active = drops.brands_for_drops(ids)
+    # Снять можно и бренд, исчезнувший из внешнего справочника.
+    removable = {entry['brand_id']: names.get(entry['brand_id'], f"Бренд #{entry['brand_id']}")
+                 for entries in active.values() for entry in entries}
+    return dict(**drops.registry_filters(rows, active, query.get('q', ''), query.get('status', '')),
+                history=drops.history_for(ids), active_brands=active, removable_brands=removable)
 
 
 @drops_bp.get('/drops')
 @login_required
 def drops_index():
+    canonical = list_views.canonical_redirect(include_brand=True)
+    if canonical is not None:
+        return canonical
     brands, brands_error = brand_client.list_brands()
     names = {b['id']: b['name'] for b in brands}
     query = _query()
     brand = query['brand']
     context = isinstance(brand, int)
-    rows = (drops.list_tree(drops.brand_context_scope(brand), query['sort'], query['order']) if context
-            else drops.registry(brand, query['sort'], query['order']))
-    ids = [r['drop_id'] if context else r['id'] for r in rows]
-    registry_context = {}
-    if not context:
-        active = drops.brands_for_drops(ids)
-        # Снять можно и бренд, исчезнувший из внешнего справочника.
-        removable = {r['brand_id']: names.get(r['brand_id'], f"Бренд #{r['brand_id']}")
-                     for entries in active.values() for r in entries}
-        registry_context = dict(active_brands=active, removable_brands=removable)
+    page = _context_page(brand, query) if context else _registry_page(brand, query, names)
     return render_template(
-        'drops.html', brands=brands, brands_error=brands_error, brand_filter=brand,
+        'drops.html', brands=brands, brands_error=brands_error, brand_filter=brand, brand_dropdown=True,
         filter_title=names.get(brand, f'Бренд #{brand}') if context else ('без бренда' if brand == 'none' else 'все'),
-        domain_rows=rows, statuses=domains.STATUSES, sorts=domains.SORTS if context else drops.REGISTRY_SORTS,
-        sort=query['sort'], order=query['order'], brand_names=names,
-        history=drops.history_for(ids, brand if context else None), **registry_context,
+        **page, statuses=domains.STATUSES,
+        sort=query['sort'], direction=query['dir'], brand_names=names,
         drop_context=context, show_history=True,
-        add_url=url_for('drops.domains_add', **query), bulk_url=url_for('drops.domains_bulk', **query))
+        add_url=url_for('drops.domains_add', **list_views.url_params(query)), bulk_url=url_for('drops.domains_bulk', **list_views.url_params(query)))
 
 
 @drops_bp.post('/drops/domains')
@@ -70,7 +66,7 @@ def domains_add():
         except domains.DomainError as exc:
             flash(str(exc), 'error')
     # Фильтр берём только из query: выбор брендов в форме не меняет страницу.
-    return redirect(url_for('drops.drops_index', **query))
+    return redirect(url_for('drops.drops_index', **list_views.url_params(query)))
 
 
 @drops_bp.post('/drops/domains/bulk')
@@ -100,4 +96,4 @@ def domains_bulk():
                 raise domains.DomainError('Неизвестное действие.')
         except domains.DomainError as exc:
             flash(str(exc), 'error')
-    return redirect(url_for('drops.drops_index', **query))
+    return redirect(url_for('drops.drops_index', **list_views.url_params(query)))

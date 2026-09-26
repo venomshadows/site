@@ -4,6 +4,7 @@ import os
 from zoneinfo import ZoneInfo
 from flask import Blueprint, Flask, Response, redirect, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
+from venomshadows_ui import NavItem, VenomUI
 from site_app.auth import login_required
 from site_app.auth_views import auth_bp
 from site_app import brand_client, csrf, db
@@ -90,6 +91,12 @@ def create_app(config: dict | None = None) -> Flask:
         return url_for("static", filename=filename, v=version)
 
     csrf.init_app(app)
+    VenomUI(app, service='site', home_endpoint='pages.index', logout_endpoint='auth.logout',
+            logo='img/logo.webp', csrf_field=csrf.csrf_field, nav=[
+                NavItem('brands', 'pages.index', 'Бренды', match=('pages.', 'brands.')),
+                NavItem('drops', 'drops.drops_index', 'Дропы', match=('drops.',)),
+                NavItem('settings', 'settings.settings_page', 'Настройки', match=('settings.',)),
+            ])
     db.init_db()
     app.register_blueprint(brands_bp)
     app.register_blueprint(drops_bp)

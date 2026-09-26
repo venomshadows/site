@@ -1,3 +1,4 @@
+import re
 from unittest.mock import patch
 
 import pytest
@@ -12,33 +13,31 @@ BRANDS = [{'id': 7, 'name': 'Первый', 'query_frequency_total': 123},
 
 @pytest.mark.parametrize('tab', ['yandex', 'google'])
 @pytest.mark.parametrize('sort', ['created_at', 'status', 'registered_at'])
-@pytest.mark.parametrize('order, arrow, aria', [('asc', '↑', 'ascending'), ('desc', '↓', 'descending')])
-def test_domain_sort_headers(client, login, tab, sort, order, arrow, aria):
+@pytest.mark.parametrize('order, aria', [('asc', 'ascending'), ('desc', 'descending')])
+def test_domain_sort_headers(client, login, tab, sort, order, aria):
     login()
     with patch.object(brand_client, 'list_brands', return_value=(BRANDS, None)):
-        page = client.get(f'/brands/7/{tab}?sort={sort}&order={order}')
+        page = client.get(f'/brands/7/{tab}?sort={sort}&dir={order}')
     assert page.status_code == 200
     head = page.text.split('<thead>')[1].split('</thead>')[0]
     for field in ('created_at', 'status', 'registered_at'):
-        direction = 'asc' if field == sort and order == 'desc' else 'desc'
-        assert f'href="/brands/7/{tab}?sort={field}&amp;order={direction}"' in head
-    assert head.count('aria-sort=') == 1
+        direction = 'desc' if field == sort and order == 'asc' else 'asc'
+        assert f'href="/brands/7/{tab}?sort={field}&amp;dir={direction}"' in head
+    assert head.count('aria-sort="none"') == 2
     assert f'aria-sort="{aria}"' in head
-    assert f'<span aria-hidden="true">{arrow}</span>' in head
-    assert '<select name="sort">' in page.text
-    assert 'Выбрано: <span data-domains-count>0</span>' in page.text
+    assert '<select name="sort">' not in page.text
+    assert 'Выбрано: <span data-selection-count>0</span>' in page.text
 
 
 def test_domain_sort_headers_default_and_invalid_query(client, login):
     login()
     with patch.object(brand_client, 'list_brands', return_value=(BRANDS, None)):
         default = client.get('/brands/7/yandex').text
-        invalid = client.get('/brands/7/yandex?sort=DROP&order=oops').text
+        invalid = client.get('/brands/7/yandex?sort=DROP&dir=oops', follow_redirects=True).text
     for page in (default, invalid):
         head = page.split('<thead>')[1].split('</thead>')[0]
-        assert 'sort=created_at&amp;order=asc' in head
+        assert 'sort=created_at&amp;dir=asc' in head
         assert 'aria-sort="descending"' in head
-        assert '<span aria-hidden="true">↓</span>' in head
 
 
 def test_index_redirects_to_first_brand(client, login):
@@ -61,22 +60,22 @@ def test_tabs(client, login, tab):
     with patch.object(brand_client, 'list_brands', return_value=(BRANDS, None)):
         response = client.get(f'/brands/7/{tab}')
     assert response.status_code == 200
-    assert f'<h1 class="page__title">{TABS[tab]["title"]}</h1>' in response.text
-    if TABS[tab]['domains']:
-        assert 'Список доменов пуст.' in response.text
-        assert 'name="domains"' in response.text
-        assert 'class="domain-status ' not in response.text
-        assert 'Раздел в разработке.' not in response.text
-    else:
-        assert 'Раздел в разработке.' in response.text
+    assert f'<h1>{TABS[tab]["title"]}</h1>' in response.text
+    assert 'Список доменов пуст.' in response.text
+    assert 'name="domains"' in response.text
+    assert 'class="domain-status ' not in response.text
+    assert 'Раздел в разработке.' not in response.text
     assert '(123)' in response.text and '()' not in response.text
-    assert 'brand-list__item--active' in response.text
-    assert 'aria-current="page"' in response.text
+    assert 'aria-label="Бренды"' in response.text
+    sidebar = re.search(r'<nav aria-label="Бренды">.*?</nav>', response.text, re.S)
+    assert sidebar is not None
+    assert '<a href="/brands/7/yandex" aria-current="page">' in sidebar.group()
+    assert '<a href="/brands/8/yandex">' in sidebar.group()
     for key in TABS:
         assert f'/brands/7/{key}' in response.text
     for logo in ('yandex', 'google'):
-        assert f'/static/img/{logo}.svg?v=' in response.text
-        assert client.get(f'/static/img/{logo}.svg').status_code == 200
+        assert f'/_ui/img/{logo}.svg?v=' in response.text
+        assert client.get(f'/_ui/img/{logo}.svg').status_code == 200
 
 
 @pytest.mark.parametrize('path', ['/brands/7/unknown-tab', '/brands/99/yandex'])
@@ -104,7 +103,7 @@ def test_brand_unavailable(client, login):
         response = client.get('/brands/7/yandex')
     assert response.status_code == 200
     assert 'Brand недоступен' in response.text and 'Ошибка Brand' in response.text
-    assert '<nav class="tabs">' not in response.text
+    assert '<nav class="subnav"' not in response.text
 
 
 @pytest.mark.parametrize('path', ['/', *(f'/brands/7/{tab}' for tab in TABS), '/brands/7/unknown-tab'])

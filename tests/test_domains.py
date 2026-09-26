@@ -227,17 +227,17 @@ def test_post_unknown_engine(client, login, csrf_post, engine, suffix):
 def test_add_redirect_flash_and_unicode(client, login, csrf_post):
     login()
     with patch.object(brand_client, 'list_brands', side_effect=AssertionError('POST must be local')):
-        response = csrf_post('/brands/7/yandex/domains?sort=status&order=asc',
+        response = csrf_post('/brands/7/yandex/domains?sort=status&dir=asc',
                              data={'domains': 'пример.рф пример.рф bad'})
-    assert response.location == '/brands/7/yandex?sort=status&order=asc'
+    assert response.location == '/brands/7/yandex?sort=status&dir=asc'
     with patch.object(brand_client, 'list_brands', return_value=([{'id': 7, 'name': 'Бренд'}], None)):
         page = client.get(response.location)
         assert 'Добавлено доменов: 1.' in page.text and 'дубликат в списке' in page.text
         assert 'некорректный домен' in page.text and 'пример.рф' in page.text
-        assert 'domain-status--new' in page.text
+        assert 'pill--accent' in page.text
         assert page.headers['Cache-Control'] == 'no-store'
         assert 'Добавлено доменов' not in client.get(response.location).text
-        assert client.get('/brands/7/yandex?sort=DROP&order=oops').status_code == 200
+        assert client.get('/brands/7/yandex?sort=DROP&dir=oops', follow_redirects=True).status_code == 200
     assert d.sorting('DROP', 'oops') == ('created_at', 'desc')
 
 
@@ -249,9 +249,9 @@ def test_add_redirect_flash_and_unicode(client, login, csrf_post):
 def test_bulk_errors(client, login, csrf_post, tree, data, message):
     login()
     before = rows()
-    response = csrf_post('/brands/7/yandex/domains/bulk?sort=status&order=asc',
+    response = csrf_post('/brands/7/yandex/domains/bulk?sort=status&dir=asc',
                          data={**data, 'ids': [tree['a'], tree['e']]})
-    assert response.location == '/brands/7/yandex?sort=status&order=asc'
+    assert response.location == '/brands/7/yandex?sort=status&dir=asc'
     assert rows() == before
     with client.session_transaction() as session:
         assert session['_flashes'][-1][0] == 'error'
@@ -272,10 +272,9 @@ def test_domain_tree_selection_markup(client, login, tree):
     with patch.object(brand_client, 'list_brands', return_value=([{'id': 7, 'name': 'Бренд'}], None)):
         page = client.get('/brands/7/yandex').text
     for row in d.list_tree(d.brand_engine_scope(7, 'yandex')):
-        modifier = ' domain-name--nested' if row['depth'] > 0 else ''
-        assert f'class="domain-name{modifier}" style="--depth: {row["depth"]}"' in page
+        assert f'class="domain-name" style="--depth: {row["depth"]}"' in page
         assert f'name="ids" value="{row["id"]}"' in page
-    assert page.count('data-domains-all') == 1
-    assert page.count('data-domains-count') == 1
+    assert page.count('data-select-all') == 1
+    assert page.count('data-selection-count') == 1
     assert 'role="status" aria-live="polite"' in page
-    assert 'Выбрано: <span data-domains-count>0</span>' in page
+    assert 'Выбрано: <span data-selection-count>0</span>' in page

@@ -1,26 +1,14 @@
-{% extends "auth_base.html" %}
-{% from "_macros.html" import csrf_field %}
-
-{% block steps %}
-  <span class="step step--active">1</span>
-  <span class="step-line"></span>
-  <span class="step">2</span>
-{% endblock %}
-
-{% block auth_title %}Вход в систему{% endblock %}
-{% block auth_hint %}Шаг 1 из 2 — логин и пароль{% endblock %}
-
-{% block auth_form %}
-  <form method="post" action="{{ url_for('auth.login_submit') }}" class="auth-form" autocomplete="off">
-    {{ csrf_field() }}
-    <label class="field">
-      <span class="field__label">Логин</span>
-      <input type="text" name="username" placeholder="Логин" autofocus required autocomplete="username">
-    </label>
-    <label class="field">
-      <span class="field__label">Пароль</span>
-      <input type="password" name="password" placeholder="Пароль" required autocomplete="current-password">
-    </label>
-    <button type="submit" class="btn btn--primary">Далее →</button>
-  </form>
+{% extends 'venom_ui/auth.html' %}
+{% set auth_step = 1 %}
+{% block title %}Вход — venom_shadows site{% endblock %}
+{% block auth_content %}
+<h1>Вход в систему</h1>
+<p class="auth__hint">Шаг 1 из 2 — логин и пароль</p>
+{% if error %}{{ ui.banner('error', error, closable=false, inline=true) }}{% endif %}
+<form method="post" action="{{ url_for('auth.login_submit') }}">
+  {{ venom_ui.csrf() }}
+  {{ ui.field('username', 'Логин', placeholder='Логин', required=true, attrs={'autocomplete': 'username', 'autofocus': true}) }}
+  {{ ui.field('password', 'Пароль', type='password', placeholder='Пароль', required=true, attrs={'autocomplete': 'current-password'}) }}
+  {{ ui.btn('Далее', icon='arrow-right') }}
+</form>
 {% endblock %}

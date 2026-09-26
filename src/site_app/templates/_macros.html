@@ -1,105 +1,36 @@
-{% macro csrf_field() -%}
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-{%- endmacro %}
-
-{% macro brand_logo() -%}
-  <img class="brand-logo" src="{{ static_url('img/logo.webp') }}" width="800" height="333" alt="venom_shadows site">
-{%- endmacro %}
-
-{% macro secret_field(label, field_name, has_value, empty_placeholder='Ключ ещё не задан') -%}
-  <div class="field">
-    <label for="{{ field_name }}" class="field__label">{{ label }}</label>
-    <input
-      id="{{ field_name }}"
-      type="password"
-      name="{{ field_name }}"
-      placeholder="{{ '•••••••• (оставь пустым, чтобы не менять)' if has_value else empty_placeholder }}"
-      autocomplete="new-password"
-    >
-    {% if has_value %}
-      <label class="field field--checkbox">
-        <input type="checkbox" name="{{ field_name }}__clear" value="1">
-        <span class="field__label">Очистить</span>
-      </label>
-    {% endif %}
-  </div>
-{%- endmacro %}
-
-{# Видимое поле ключа или токена: значение всегда показывается (решение
-   пользователя), пустая отправка его стирает. Одна разметка для всех таких
-   полей на /settings. #}
-{% macro key_field(label, field_name, value, placeholder='') -%}
-  <label class="field">
-    <span class="field__label">{{ label }}</span>
-    <input type="text" name="{{ field_name }}" value="{{ value or '' }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %} autocomplete="off">
-  </label>
-{%- endmacro %}
-
-
-{% macro engine_logo(source) -%}
-  <img class="engine-logo" src="{{ static_url('img/' ~ source ~ '.svg') }}" alt="" width="20" height="20">
-{%- endmacro %}
-
-{% macro brand_error_panel(reason) -%}
-  <h1 class="page__title">Brand недоступен</h1>
-  <p class="page__lead">{{ reason }}</p>
-{%- endmacro %}
-
-{% macro sort_link(field, label, sort, order) -%}
-  {# A newly selected column always starts descending. #}
-  {% set next_order = 'asc' if sort == field and order == 'desc' else 'desc' %}
-  {% set link_args = request.args.to_dict() %}
-  {% set _ = link_args.update(request.view_args or {}, sort=field, order=next_order) %}
-  <th scope="col"{% if sort == field %} aria-sort="{{ 'ascending' if order == 'asc' else 'descending' }}"{% endif %}><a class="domain-sort-link" href="{{ url_for(request.endpoint, **link_args) }}">{{ label }}{% if sort == field %} <span aria-hidden="true">{{ '↑' if order == 'asc' else '↓' }}</span>{% endif %}</a></th>
-{%- endmacro %}
-
+{% import 'venom_ui/macros.html' as ui %}
+{% import 'venom_ui/list.html' as list %}
 {% macro domain_add_form(add_url, brands=(), select_brands=false) -%}
 <form method="post" action="{{ add_url }}" class="domain-add">
-  {{ csrf_field() }}
-  <label class="field">
-    <span class="field__label">Добавить домены</span>
-    <textarea name="domains" rows="3" placeholder="example.ru, пример.рф" required aria-describedby="domain-help"></textarea>
-  </label>
-  <p class="hint" id="domain-help">Разделяйте домены пробелами, запятыми или переносами строк.</p>
+  {{ venom_ui.csrf() }}
+  {{ ui.textarea('domains', 'Добавить домены', rows=3, required=true, placeholder='example.ru, пример.рф', hint='Разделяйте домены пробелами, запятыми или переносами строк.') }}
   {% if select_brands %}
-    <fieldset><legend>Бренды (необязательно)</legend>
-      <p class="hint">Ничего не выбирайте, чтобы добавить без брендов.</p>
-      {% for b in brands %}<label class="field field--checkbox"><input type="checkbox" name="brand_ids" value="{{ b.id }}"><span>{{ b.name }}</span></label>{% endfor %}
-    </fieldset>
+    {% set options = [] %}
+    {% for brand in brands %}{% set _ = options.append((brand.id, brand.name)) %}{% endfor %}
+    {{ ui.checkbox_group('brand_ids', 'Бренды (необязательно)', options, hint='Ничего не выбирайте, чтобы добавить без брендов.') }}
   {% endif %}
-  <button class="btn btn--primary" type="submit">Добавить</button>
-</form>
-{%- endmacro %}
-
-{% macro domain_sort_form(sorts, sort, order) -%}
-<form method="get" class="domain-sort">
-  {% for key, value in request.args.items() if key not in ('sort', 'order') %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
-  <label class="field">Сортировка
-    <select name="sort">{% for key, title in sorts.items() %}<option value="{{ key }}"{{ ' selected' if sort == key else '' }}>{{ title }}</option>{% endfor %}</select>
-  </label>
-  <label class="field">Порядок
-    <select name="order"><option value="desc"{{ ' selected' if order == 'desc' else '' }}>По убыванию</option><option value="asc"{{ ' selected' if order == 'asc' else '' }}>По возрастанию</option></select>
-  </label>
-  <button type="submit" class="btn btn--secondary">Сортировать</button>
+  {{ ui.btn('Добавить') }}
 </form>
 {%- endmacro %}
 
 {% macro drop_history(entries, brand_names) -%}
-  {% if entries %}<details><summary>История брендов</summary>
+  {% if entries %}<details class="domain-history"><summary>История брендов</summary>
     {% for entry in entries %}<p>{{ entry.brand_name if entry.removed_at else brand_names.get(entry.brand_id, 'Бренд #' ~ entry.brand_id) }}: {{ entry.assigned_at|fmt_datetime }} — {{ entry.removed_at|fmt_datetime if entry.removed_at else 'по настоящее время' }}</p>{% endfor %}
   </details>{% else %}—{% endif %}
 {%- endmacro %}
 
-{% macro settings_header(id, title, configured, empty='Не настроено') -%}
-  <div class="settings-section__head">
-    <h2 class="settings-section__title" id="{{ id }}">{{ title }}</h2>
-    <span class="state-marker{{ ' state-marker--on' if configured }}"><span class="state-marker__dot" aria-hidden="true"></span>{{ 'Настроено' if configured else empty }}</span>
-  </div>
-{%- endmacro %}
-
-{% macro settings_actions(test_endpoint=None, test_label=None) -%}
-  <div class="settings-actions">
-    <button type="submit" class="btn btn--primary">Сохранить</button>
-    {% if test_endpoint %}<button type="submit" formaction="{{ url_for(test_endpoint) }}" class="btn btn--secondary">{{ test_label }}</button>{% endif %}
-  </div>
+{% macro domain_list(columns, label, bulk) -%}
+  {% set render_rows = caller %}
+  {{ domain_add_form(add_url, brands, select_brands=not drop_context and brand_dropdown) }}
+  {% include '_filters.html' %}
+  <form method="post" action="{{ bulk_url }}">
+    {{ venom_ui.csrf() }}
+    {% call(select_name) list.data_table('domain-table', columns, sort=sort, dir=direction, mode='server', selectable=true, select_name='ids', stacked=true, label=label) %}
+      <tbody>
+        {% if domain_rows %}{{ render_rows(select_name) }}
+        {% else %}{{ list.empty_row(columns|length + 1, 'Ничего не найдено.' if total else 'Список доменов пуст.', hidden=false) }}{% endif %}
+      </tbody>
+    {% endcall %}
+    {% call list.bulk_bar('domain-table', label=label) %}{{ bulk() }}{% endcall %}
+  </form>
 {%- endmacro %}

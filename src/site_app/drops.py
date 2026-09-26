@@ -96,6 +96,13 @@ def registry(brand_filter='all', sort=None, order=None):
     return [{**row, 'display_domain': domains.display_domain(row['domain'])} for row in rows]
 
 
+def registry_filters(rows, active_brands, q='', status=''):
+    # Неназначенные домены не имеют статуса использования; видны в «Все».
+    enriched = [{**row, 'statuses': [entry['status'] for entry in active_brands.get(row['id'], [])]}
+                for row in rows]
+    return domains.list_filters(enriched, q, status)
+
+
 def _brand_rows(drop_ids, condition='', params=()):
     if not drop_ids:
         return {}

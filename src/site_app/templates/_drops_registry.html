@@ -1,32 +1,23 @@
-{% from '_macros.html' import csrf_field, sort_link, domain_add_form, domain_sort_form, drop_history with context %}
-{{ domain_add_form(add_url, brands, true) }}
-{{ domain_sort_form(sorts, sort, order) }}
-<form method="post" action="{{ bulk_url }}">
-  {{ csrf_field() }}
-  <div class="domain-table-wrap">
-    <table class="domain-table">
-      <thead><tr><th><input type="checkbox" data-domains-all aria-label="Выбрать все"></th><th>Домен</th>{{ sort_link('created_at', 'Дата добавления', sort, order) }}{{ sort_link('registered_at', 'Дата регистрации', sort, order) }}<th>Бренды</th><th>История брендов</th></tr></thead>
-      <tbody>
-        {% for row in domain_rows %}<tr>
-          <td><input type="checkbox" name="ids" value="{{ row.id }}" aria-label="Выбрать {{ row.display_domain }}"></td>
-          <td><span class="domain-name">{{ row.display_domain }}</span></td>
-          <td>{{ row.created_at|fmt_datetime }}</td><td>{{ row.registered_at|fmt_datetime }}</td>
-          <td>{% for entry in active_brands.get(row.id, []) %}<p><a href="{{ url_for('drops.drops_index', brand=entry.brand_id) }}">{{ brand_names.get(entry.brand_id, 'Бренд #' ~ entry.brand_id) }}</a> <span class="domain-status {{ statuses[entry.status].css }}">{{ statuses[entry.status].title }}</span></p>{% else %}—{% endfor %}</td>
-          <td>{{ drop_history(history.get(row.id, []), brand_names) }}</td>
-        </tr>{% else %}<tr><td colspan="6" class="hint">Список доменов пуст.</td></tr>{% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <div class="domain-actions">
-    <span class="domain-selection" role="status" aria-live="polite">Выбрано: <span data-domains-count>0</span></span>
-    <fieldset><legend>Присвоить бренды</legend>
-      {% for b in brands %}<label class="field field--checkbox"><input type="checkbox" name="target_brand_ids" value="{{ b.id }}"><span>{{ b.name }}</span></label>{% endfor %}
-      <button type="submit" class="btn btn--secondary" name="action" value="assign_brands"{% if brands_error or not brands %} disabled{% endif %}>Присвоить бренды</button>
-    </fieldset>
-    <fieldset><legend>Снять бренды</legend>
-      {% for id, name in removable_brands.items() %}<label class="field field--checkbox"><input type="checkbox" name="remove_brand_ids" value="{{ id }}"><span>{{ name }}</span></label>{% endfor %}
-      <button type="submit" class="btn btn--secondary" name="action" value="unassign_brands">Снять бренды</button>
-    </fieldset>
-    <button type="submit" class="btn btn--danger" name="action" value="delete" data-confirm="Удалить выбранные домены и всю историю во всех брендах?">Удалить домен</button>
-  </div>
-</form>
+{% import 'venom_ui/macros.html' as ui %}
+{% import 'venom_ui/list.html' as list %}
+{% from '_macros.html' import domain_list, drop_history with context %}
+{% set columns = [{'key': 'domain', 'label': 'Домен', 'sortable': false}, {'key': 'created_at', 'label': 'Дата добавления'}, {'key': 'registered_at', 'label': 'Дата регистрации'}, {'key': 'brands', 'label': 'Бренды', 'sortable': false}, {'key': 'history', 'label': 'История брендов', 'sortable': false}] %}
+{% macro bulk_actions() %}
+    {% set options = [] %}
+    {% for brand in brands %}{% set _ = options.append((brand.id, brand.name)) %}{% endfor %}
+    {{ ui.checkbox_group('target_brand_ids', 'Присвоить бренды', options, collapsible=true) }}
+    {{ ui.btn('Присвоить бренды', 'secondary', attrs={'name': 'action', 'value': 'assign_brands', 'disabled': true if brands_error or not brands else none}) }}
+    {{ ui.checkbox_group('remove_brand_ids', 'Снять бренды', removable_brands.items(), collapsible=true) }}
+    {{ ui.btn('Снять бренды', 'secondary', attrs={'name': 'action', 'value': 'unassign_brands'}) }}
+    {{ ui.btn('Удалить домен', 'danger', attrs={'name': 'action', 'value': 'delete', 'data-confirm': 'Удалить выбранные домены и всю историю во всех брендах?', 'data-confirm-danger': ''}) }}
+{% endmacro %}
+{% call(select_name) domain_list(columns, 'Дропы', bulk_actions) %}
+    {% for row in domain_rows %}<tr {{ list.row_attrs(row.domain, id=row.id) }}>
+      {{ list.select_cell(row.id, row.display_domain, name=select_name) }}
+      <td data-label="Домен">{{ row.display_domain }}</td>
+      <td data-label="Дата добавления">{{ row.created_at|fmt_datetime }}</td>
+      <td data-label="Дата регистрации">{{ row.registered_at|fmt_datetime }}</td>
+      <td data-label="Бренды">{% for entry in active_brands.get(row.id, []) %}<p><a href="{{ url_for('drops.drops_index', brand=entry.brand_id) }}">{{ brand_names.get(entry.brand_id, 'Бренд #' ~ entry.brand_id) }}</a> {{ ui.status_pill(statuses[entry.status].tone, statuses[entry.status].title) }}</p>{% else %}—{% endfor %}</td>
+      <td data-label="История брендов">{{ drop_history(history.get(row.id, []), brand_names) }}</td>
+    </tr>{% endfor %}
+{% endcall %}

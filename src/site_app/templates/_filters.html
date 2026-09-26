@@ -1,0 +1,13 @@
+{% import 'venom_ui/list.html' as list %}
+{% set options = [('', 'Все')] %}
+{% for key, value in statuses.items() %}{% set _ = options.append((key, value.title, value.tone)) %}{% endfor %}
+{% call list.filter_bar('domain-table', mode='server', total=total, shown=shown, label='Домены') %}
+  {{ list.search(value=q, placeholder='Поиск по домену') }}
+  {{ list.chips('status', 'Статус', options, selected=status_filter, counts=status_counts) }}
+  {% if brand_dropdown %}
+    {% set brand_options = [('', 'Все бренды'), ('none', 'Без бренда')] %}
+    {% if drop_context and brand_filter not in brand_names %}{% set _ = brand_options.append((brand_filter|string, filter_title)) %}{% endif %}
+    {% for b in brands %}{% set _ = brand_options.append((b.id|string, b.name)) %}{% endfor %}
+    {{ list.dropdown('brand', 'Бренд', brand_options, selected=brand_filter|string if brand_filter != 'all' else '') }}
+  {% endif %}
+{% endcall %}

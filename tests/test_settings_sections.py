@@ -11,11 +11,11 @@ def test_shared_navigation(client, login, monkeypatch, path, active):
     login()
     monkeypatch.setattr(brand_client, 'list_brands', lambda: ([{'id': 7, 'name': 'Brand'}], None) if path != '/' else ([], None))
     html = client.get(path).text
-    header = re.search(r'<header class="topbar">(.*?)</header>', html, re.S).group(1)
+    header = re.search(r'<header class="topbar"[^>]*>(.*?)</header>', html, re.S).group(1)
     assert re.findall(r'class="topbar__tab[^\"]*"[^>]*>(.*?)</a>', header) == ['Бренды', 'Дропы', 'Настройки']
     assert f'aria-current="page">{active}</a>' in header
     assert header.count('aria-current="page"') == 1
-    assert 'method="post" action="/logout" class="topbar__logout"' in header
+    assert re.search(r'<form\b[^>]*class="topbar__logout"[^>]*method="post"[^>]*action="/logout"', header)
     assert 'name="csrf_token"' in header
     assert html.count('action="/logout"') == 1
     assert 'sidebar__account' not in html and 'btn-link' not in header
@@ -64,14 +64,14 @@ def test_email_empty_host_and_invalid_port_use_defaults(client, login, csrf_post
     assert response.status_code == 200
     assert db.get_settings()['smtp_host'] == 'localhost'
     assert db.get_settings()['smtp_port'] == 25
-    assert 'name="smtp_host" placeholder="localhost" value="localhost"' in response.text
+    assert re.search(r'<input[^>]*name="smtp_host"[^>]*value="localhost"[^>]*placeholder="localhost"', response.text)
 
 
 @pytest.mark.parametrize('host', ['', 'smtp.example.com'])
 def test_settings_renders_stored_smtp_host(client, login, host):
     login()
     db.update_settings(smtp_host=host)
-    assert f'name="smtp_host" placeholder="localhost" value="{host}"' in client.get('/settings').text
+    assert re.search(rf'<input[^>]*name="smtp_host"[^>]*value="{re.escape(host)}"[^>]*placeholder="localhost"', client.get('/settings').text)
 
 
 def test_telegram_save_preserves_empty_smtp_settings(client, login, csrf_post):
@@ -89,7 +89,7 @@ def test_settings_independent_forms_and_status(client, login):
     sections = re.findall(r'<section class="panel settings-section".*?</section>', html, re.S)
     assert len(sections) == 4
     assert html.count('state-marker--on') == 0
-    expected = [('email', 'notify_email', 'settings-email-title'), ('telegram', 'telegram_bot_token', 'settings-telegram-title'), ('brand', 'brand_api_key', 'settings-brand-title')]
+    expected = [('email', 'notify_email', 'email-title'), ('telegram', 'telegram_bot_token', 'telegram-title'), ('brand', 'brand_api_key', 'brand-title')]
     for section, (name, field, title) in zip(sections, expected):
         assert section.count('<form ') == 1 and section.count('</form>') == 1
         assert f'name="section" value="{name}"' in section

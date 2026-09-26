@@ -1,129 +1,46 @@
-{% extends "app_shell.html" %}
-{% from "_macros.html" import key_field, secret_field, csrf_field, settings_header, settings_actions %}
-{% set nav_active = "settings" %}
-{% block page_class %}page page--settings{% endblock %}
+{% extends 'venom_ui/app.html' %}
 {% block title %}Настройки — venom_shadows site{% endblock %}
 {% block content %}
-    <div class="page-header">
-      <div class="page-header__text">
-        <h1 class="page__title">Настройки</h1>
+<div class="page">
+  {{ ui.page_header('Настройки') }}
+  {% if saved %}{{ ui.banner('success', 'Настройки обновлены.') }}{% endif %}
+  {% if test_result %}{{ ui.banner('success' if test_result.ok else 'error', test_result.channel_label ~ ': ' ~ test_result.message) }}{% endif %}
+  <div class="settings-stack">
+    {% call ui.settings_section('email', 'Email-уведомления', settings.notify_email, action=url_for('settings.settings_save'), hint='Отправка через SMTP: локальный сервер localhost:25 или внешний сервер с авторизацией и STARTTLS.') %}
+      <div class="field-grid">
+        {{ ui.field('notify_email', 'Email для уведомлений', settings.notify_email, type='email', placeholder='admin@example.com', attrs={'autocomplete': 'off'}) }}
+        {{ ui.field('smtp_host', 'SMTP-сервер', settings.smtp_host, placeholder='localhost', attrs={'autocomplete': 'off'}) }}
+        {{ ui.field('smtp_port', 'Порт', settings.smtp_port or 25, type='number', attrs={'min': 1, 'max': 65535, 'autocomplete': 'off'}) }}
+        {{ ui.field('smtp_username', 'Логин SMTP (необязательно)', settings.smtp_username, placeholder='без авторизации, если пусто', attrs={'autocomplete': 'off'}) }}
+        {{ ui.secret_field('smtp_password', 'Пароль SMTP', has_smtp_password, clearable=true) }}
+        {{ ui.field('smtp_from', 'Адрес отправителя (необязательно)', settings.smtp_from, placeholder='site@site.venomshadows.ru', attrs={'autocomplete': 'off'}) }}
       </div>
-    </div>
-
-    {% if saved %}
-      <div class="result result--ok">
-        <span class="result__badge">Сохранено</span><span>Настройки обновлены.</span>
+      {{ ui.checkbox('smtp_use_tls', 'Использовать STARTTLS', settings.smtp_use_tls, attrs={'autocomplete': 'off'}) }}
+      {{ ui.settings_actions(test_label='Сохранить и отправить тестовое письмо', test_action=url_for('settings.settings_test_email')) }}
+    {% endcall %}
+    {% call ui.settings_section('telegram', 'Telegram-бот', settings.telegram_bot_token and settings.telegram_chat_id, action=url_for('settings.settings_save'), hint='Токен выдаёт @BotFather. Получатель должен один раз написать боту /start.') %}
+      <div class="field-grid">
+        {{ ui.field('telegram_bot_token', 'Токен бота', settings.telegram_bot_token, placeholder='123456789:AA…', attrs={'autocomplete': 'off'}) }}
+        {{ ui.field('telegram_chat_id', 'Chat ID', settings.telegram_chat_id, placeholder='например, 123456789', attrs={'autocomplete': 'off'}) }}
       </div>
-    {% endif %}
-    {% if test_result %}
-      <div class="result {{ 'result--ok' if test_result.ok else 'result--error' }}">
-        <span class="result__badge">{{ test_result.channel_label }}</span><span>{{ test_result.message }}</span>
+      {{ ui.settings_actions(test_label='Сохранить и отправить тест в Telegram', test_action=url_for('settings.settings_test_telegram')) }}
+    {% endcall %}
+    {% call ui.settings_section('brand', 'API-ключ Brand', settings.brand_api_key, marker_off_text='Ключ не задан', action=url_for('settings.settings_save'), hint='Ключ сервиса Brand для интеграции с сайтом.') %}
+      <div class="field-grid">
+        {{ ui.field('brand_api_key', 'API-ключ', settings.brand_api_key, placeholder='Ключ ещё не задан', attrs={'autocomplete': 'off'}) }}
       </div>
-    {% endif %}
-
-    <div class="settings-stack">
-      <section class="panel settings-section" aria-labelledby="settings-email-title">
-        <form method="post" action="{{ url_for('settings.settings_save') }}" autocomplete="off">
-          {{ csrf_field() }}
-          <input type="hidden" name="section" value="email">
-          {{ settings_header('settings-email-title', 'Email-уведомления', settings.notify_email) }}
-          <p class="settings-section__hint">
-            Отправка через SMTP, настроенный ниже — по умолчанию локальный сервер (localhost:25) без
-            авторизации, можно указать и внешний SMTP с логином/паролем и STARTTLS.
-          </p>
-
-          <label class="field">
-            <span class="field__label">Email для уведомлений</span>
-            <input type="email" name="notify_email" placeholder="admin@example.com" value="{{ settings.notify_email or '' }}">
-          </label>
-
-          <div class="field-row">
-            <label class="field">
-              <span class="field__label">SMTP-сервер</span>
-              <input type="text" name="smtp_host" placeholder="localhost" value="{{ settings.smtp_host }}">
-            </label>
-            <label class="field">
-              <span class="field__label">Порт</span>
-              <input type="number" name="smtp_port" min="1" max="65535" value="{{ settings.smtp_port or 25 }}">
-            </label>
-          </div>
-
-          <div class="field-row">
-            <label class="field">
-              <span class="field__label">Логин SMTP (необязательно)</span>
-              <input type="text" name="smtp_username" placeholder="без авторизации, если пусто" value="{{ settings.smtp_username or '' }}" autocomplete="off">
-            </label>
-            {{ secret_field('Пароль SMTP', 'smtp_password', settings.smtp_password, 'без авторизации, если пусто') }}
-          </div>
-
-          <label class="field">
-            <span class="field__label">Адрес отправителя (необязательно)</span>
-            <input type="text" name="smtp_from" placeholder="site@site.venomshadows.ru" value="{{ settings.smtp_from or '' }}">
-          </label>
-
-          <label class="field field--checkbox">
-            <input type="checkbox" name="smtp_use_tls" value="1" {{ 'checked' if settings.smtp_use_tls }}>
-            <span class="field__label">Использовать STARTTLS</span>
-          </label>
-
-          {{ settings_actions('settings.settings_test_email', 'Сохранить и отправить тестовое письмо') }}
-        </form>
-      </section>
-      <section class="panel settings-section" aria-labelledby="settings-telegram-title">
-        <form method="post" action="{{ url_for('settings.settings_save') }}" autocomplete="off">
-          {{ csrf_field() }}
-          <input type="hidden" name="section" value="telegram">
-          {{ settings_header('settings-telegram-title', 'Telegram-бот', settings.telegram_bot_token and settings.telegram_chat_id) }}
-          <p class="settings-section__hint">
-            Обычный Bot API. Токен получаешь у @BotFather, а chat_id — у того чата/пользователя,
-            который должен получать уведомления; получателю нужно один раз самому написать боту
-            <code>/start</code> — иначе Bot API не даёт написать первым.
-          </p>
-
-          {{ key_field('Токен бота', 'telegram_bot_token', settings.telegram_bot_token, '123456789:AA…') }}
-
-          <label class="field">
-            <span class="field__label">Chat ID</span>
-            <input type="text" name="telegram_chat_id" placeholder="например, 123456789" value="{{ settings.telegram_chat_id or '' }}">
-          </label>
-
-          {{ settings_actions('settings.settings_test_telegram', 'Сохранить и отправить тест в Telegram') }}
-        </form>
-      </section>
-      <section class="panel settings-section" aria-labelledby="settings-brand-title">
-        <form method="post" action="{{ url_for('settings.settings_save') }}" autocomplete="off">
-          {{ csrf_field() }}
-          <input type="hidden" name="section" value="brand">
-          {{ settings_header('settings-brand-title', 'API-ключ Brand', settings.brand_api_key, 'Ключ не задан') }}
-          <p class="settings-section__hint">Ключ сервиса Brand для интеграции с сайтом.</p>
-          {{ key_field('API-ключ', 'brand_api_key', settings.brand_api_key, 'Ключ ещё не задан') }}
-          {{ settings_actions() }}
-        </form>
-      </section>
-    <section class="panel settings-section" aria-labelledby="settings-api-title">
-      {{ settings_header('settings-api-title', 'API-ключ сайта', settings.api_key, 'Ключ не задан') }}
-      <p class="settings-section__hint">Передавай ключ в заголовке <code>Authorization: Bearer &lt;ключ&gt;</code> или <code>X-API-Key</code>. Проверка доступа: <code>GET /api/v1/ping</code>. Генерация нового ключа сразу отзывает предыдущий.</p>
+      {{ ui.settings_actions() }}
+    {% endcall %}
+    {% call ui.settings_section('api', 'API-ключ сайта', settings.api_key, marker_off_text='Ключ не задан', action=url_for('settings.settings_api_key_generate'), hint='Передавай ключ в Authorization: Bearer <ключ> или X-API-Key. Проверка доступа: GET /api/v1/ping. Новый ключ сразу отзывает предыдущий.') %}
       {% if settings.api_key %}
-        <label class="field" for="api-key-value"><span class="field__label">Активный ключ (создан {{ settings.api_key_created_at | fmt_datetime }})</span></label>
-        <div class="api-key-row">
-          <input type="text" readonly value="{{ settings.api_key }}" id="api-key-value">
-          <button type="button" class="btn btn--secondary" data-copy-target="api-key-value">Копировать</button>
-        </div>
-      {% else %}
-        <p class="settings-section__hint">Ключ ещё не создан — запросы к API отклоняются.</p>
-      {% endif %}
+        <p>Активный ключ (создан {{ settings.api_key_created_at|fmt_datetime }})</p>
+        {{ ui.api_key_block(settings.api_key, id='api-key-value') }}
+      {% else %}<p>Ключ ещё не создан — запросы к API отклоняются.</p>{% endif %}
       <div class="settings-actions">
-        <form method="post" action="{{ url_for('settings.settings_api_key_generate') }}" {% if settings.api_key %}data-confirm="Сгенерировать новый ключ? Текущий ключ перестанет работать."{% endif %}>
-          {{ csrf_field() }}
-          <button type="submit" class="btn btn--primary">{{ 'Сгенерировать новый ключ' if settings.api_key else 'Сгенерировать ключ' }}</button>
-        </form>
-        {% if settings.api_key %}
-          <form method="post" action="{{ url_for('settings.settings_api_key_revoke') }}" data-confirm="Отозвать текущий API-ключ? Интеграция, которая его использует, перестанет работать.">
-            {{ csrf_field() }}
-            <button type="submit" class="btn btn--danger">Отозвать</button>
-          </form>
-        {% endif %}
+        {{ ui.btn('Сгенерировать новый ключ' if settings.api_key else 'Сгенерировать ключ', attrs={'data-confirm': 'Сгенерировать новый ключ? Текущий ключ перестанет работать.'} if settings.api_key else {}) }}
+        {% if settings.api_key %}{{ ui.btn('Отозвать', 'danger', attrs={'formaction': url_for('settings.settings_api_key_revoke'), 'data-confirm': 'Отозвать текущий API-ключ? Интеграция перестанет работать.', 'data-confirm-danger': ''}) }}{% endif %}
       </div>
-    </section>
-    </div>
+    {% endcall %}
+  </div>
+</div>
 {% endblock %}

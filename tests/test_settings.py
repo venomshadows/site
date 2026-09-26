@@ -159,7 +159,7 @@ def test_secret_explicit_clear(client, login, field, replacement, csrf_post):
     login()
     assert f'name="{field}__clear"' not in client.get('/settings').text
     csrf_post('/settings', data={field: 'saved-secret'})
-    assert f'name="{field}__clear" value="1"' in client.get('/settings').text
+    assert re.search(rf'<input[^>]*name="{field}__clear"[^>]*value="1"', client.get('/settings').text)
     response = csrf_post('/settings', data={field: replacement, f'{field}__clear': '1'}, follow_redirects=True)
     assert response.status_code == 200
     assert db.get_settings()[field] is None
@@ -276,7 +276,7 @@ def test_telegram_failure_redacts_token_in_error(client, login, monkeypatch, csr
         'telegram_bot_token': token, 'telegram_chat_id': '42',
     })
     assert response.status_code == 200
-    error = re.search(r'<div class="result result--error">(.*?)</div>', response.text, re.S).group(1)
+    error = re.search(r'<div class="banner banner--error"[^>]*>(.*?)</div>', response.text, re.S).group(1)
     assert token not in error
     assert '/bot&lt;redacted&gt;/sendMessage' in response.text
     assert db.get_settings()['telegram_bot_token'] == token

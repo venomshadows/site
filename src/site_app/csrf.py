@@ -3,6 +3,7 @@ import hmac
 import secrets
 
 from flask import abort, request, session
+from markupsafe import Markup
 
 
 _API_PATH_PREFIX = "/api/v1/"
@@ -21,6 +22,10 @@ def csrf_token() -> str:
     return session["csrf_token"]
 
 
+def csrf_field() -> Markup:
+    return Markup('<input type="hidden" name="csrf_token" value="{}">').format(csrf_token())
+
+
 def _protect_request() -> None:
     # API использует ключ в заголовке и не зависит от браузерной сессии.
     if _is_exempt_api_request() or request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
@@ -32,5 +37,4 @@ def _protect_request() -> None:
 
 
 def init_app(app) -> None:
-    app.add_template_global(csrf_token)
     app.before_request(_protect_request)

@@ -1,6 +1,6 @@
 """Страницы бренда и общий контекст сайдбара и вкладок."""
-from flask import Blueprint, abort, redirect, render_template, request, url_for
-from site_app import brand_client, domains, drops
+from flask import Blueprint, abort, redirect, render_template, url_for
+from site_app import brand_client, domains, drops, list_views
 from site_app.auth import login_required
 from site_app.domain_forms import add_from_form, bulk_from_form
 
@@ -8,9 +8,9 @@ brands_bp = Blueprint('brands', __name__, url_prefix='/brands')
 
 # Один реестр для маршрута и шаблона; первая вкладка открывается по умолчанию.
 TABS = {
-    'yandex': {'title': 'Яндекс', 'logo': 'yandex', 'domains': True},
-    'google': {'title': 'Google', 'logo': 'google', 'domains': True},
-    'drops': {'title': 'Дропы', 'logo': None, 'domains': True},
+    'yandex': {'title': 'Яндекс', 'logo': 'yandex'},
+    'google': {'title': 'Google', 'logo': 'google'},
+    'drops': {'title': 'Дропы', 'logo': None},
 }
 DEFAULT_TAB = next(iter(TABS))
 
@@ -29,23 +29,25 @@ def render_brand_page(template_name, *, brands, brands_error, brand, brand_id, a
 def brand_tab(brand_id: int, tab: str):
     if tab not in TABS:
         abort(404)
+    canonical = list_views.canonical_redirect()
+    if canonical is not None:
+        return canonical
     brands, brands_error = brand_client.list_brands()
     brand = next((b for b in brands if b.get('id') == brand_id), None)
     if brand is None and not brands_error:
         abort(404)
-    extra = {}
-    if TABS[tab]['domains']:
-        scope = _scope(brand_id, tab)
-        sort, order = domains.sorting(request.args.get('sort'), request.args.get('order'))
-        extra = dict(domain_rows=domains.list_tree(scope, sort, order),
-                     statuses=domains.STATUSES, sorts=domains.SORTS, sort=sort, order=order,
-                     show_history=tab == 'drops',
-                     drop_context=tab == 'drops',
-                     add_url=url_for('brands.domains_add', brand_id=brand_id, engine=tab, sort=sort, order=order),
-                     bulk_url=url_for('brands.domains_bulk', brand_id=brand_id, engine=tab, sort=sort, order=order))
-        if tab == 'drops':
-            extra.update(history=drops.history_for([r['drop_id'] for r in extra['domain_rows']], brand_id),
-                         brand_names={b['id']: b['name'] for b in brands})
+    scope = _scope(brand_id, tab)
+    query = list_views.query()
+    rows = domains.list_tree(scope, query['sort'], query['dir'])
+    extra = dict(**domains.list_filters(rows, query.get('q', ''), query.get('status', '')),
+                 statuses=domains.STATUSES, sort=query['sort'], direction=query['dir'],
+                 show_history=tab == 'drops',
+                 drop_context=tab == 'drops',
+                 add_url=url_for('brands.domains_add', brand_id=brand_id, engine=tab, **list_views.url_params(query)),
+                 bulk_url=url_for('brands.domains_bulk', brand_id=brand_id, engine=tab, **list_views.url_params(query)))
+    if tab == 'drops':
+        extra.update(history=drops.history_for([r['drop_id'] for r in extra['domain_rows']], brand_id),
+                     brand_names={b['id']: b['name'] for b in brands})
     return render_brand_page(
         'brand_tab.html', brands=brands, brands_error=brands_error,
         brand=brand, brand_id=brand_id, active_tab=tab, **extra,
@@ -57,10 +59,10 @@ def _scope(brand_id, engine):
 
 
 def _domain_destination(brand_id, engine):
-    if not TABS.get(engine, {}).get('domains'):
+    if engine not in TABS:
         abort(404)
     return url_for('brands.brand_tab', brand_id=brand_id, tab=engine,
-                   **{key: request.args[key] for key in ('sort', 'order') if key in request.args})
+                   **list_views.url_params(list_views.query()))
 
 
 @brands_bp.post('/<int:brand_id>/<engine>/domains')

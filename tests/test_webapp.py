@@ -43,7 +43,7 @@ def test_bad_first_factor(client, data, csrf_post):
     response = csrf_post("/login", data=data)
     assert response.status_code == 401
     assert _BAD_CREDENTIALS in response.text
-    assert "auth-error" in response.text
+    assert 'banner--error' in response.text and 'role="alert"' in response.text
 
 
 def test_bad_second_factor(client, first_factor, csrf_post):
@@ -221,15 +221,13 @@ def test_login_render_and_static_assets(client):
     assert 'name="username"' in html and 'name="password"' in html
     assert 'action="/login"' in html
     assert "venom_shadows site" in html
-    paths = re.findall(r"/static/([^?'\"]+)\?v=([0-9]+)", html)
-    assert {path for path, _ in paths} >= {"style.css", "img/logo.webp", "img/clouds.svg", "img/rain.svg"}
-    for path, version in paths:
-        assert int(version) > 0
-        with client.get("/static/" + path) as response:
-            assert response.status_code == 200
-    with client.get("/static/style.css") as response:
-        assert "var(--clouds)" in response.text and "var(--rain)" in response.text
-        assert "clouds.svg" not in response.text and "rain.svg" not in response.text
+    paths = re.findall(r'(?:src|href)="((?:/static/|/_ui/)[^"]+)"', html)
+    assert '/static/img/logo.webp' in paths
+    assert {path.split('?')[0] for path in paths} >= {'/_ui/tokens.css', '/_ui/ui.css', '/_ui/list.css', '/_ui/ui.js', '/_ui/list.js'}
+    for path in paths:
+        assert client.get(path).status_code == 200
+    assert '/static/style.css' not in html
+    assert 'fonts.googleapis.com' not in html
 
 
 def test_static_url_nanoseconds_and_missing_file(app, tmp_path):

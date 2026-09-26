@@ -56,7 +56,11 @@ def _render_settings(*, saved: bool = False, test_result: dict | None = None):
     (settings) плюс результат конкретного действия — вынесено сюда, чтобы
     не забыть какое-то поле в одном из нескольких POST-обработчиков
     /settings/*."""
-    return render_template("settings.html", settings=db.get_settings(), saved=saved, test_result=test_result)
+    settings = dict(db.get_settings())
+    # Даже контекст шаблона получает только признак наличия SMTP-пароля.
+    has_smtp_password = bool(settings.pop('smtp_password'))
+    return render_template("settings.html", settings=settings, has_smtp_password=has_smtp_password,
+                           saved=saved, test_result=test_result)
 
 
 def _test_result_context(channel_label: str, result: notifications.SendResult) -> dict:

@@ -1,13 +1,4 @@
-{% extends "brand_shell.html" %}
-{% from '_macros.html' import brand_error_panel %}
-{% block title %}venom_shadows site{% endblock %}
+{% extends 'brand_shell.html' %}
 {% block tab_content %}
-  <div class="panel">
-    {% if brands_error %}
-      {{ brand_error_panel(brands_error) }}
-    {% else %}
-      <h1 class="page__title">Пока нет брендов</h1>
-      <p class="page__lead">Бренды приходят с Brand (brand.venomshadows.ru) — добавь их там, и они появятся здесь.</p>
-    {% endif %}
-  </div>
+  {{ ui.empty_state('Brand недоступен' if brands_error else 'Пока нет брендов', brands_error or 'Бренды приходят с Brand (brand.venomshadows.ru) — добавь их там, и они появятся здесь.') }}
 {% endblock %}

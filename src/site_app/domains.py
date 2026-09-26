@@ -8,10 +8,10 @@ import idna
 from site_app.db import _connect
 
 STATUSES = {
-    'new': {'title': 'Новый', 'css': 'domain-status--new'},
-    'in_use': {'title': 'Используется', 'css': 'domain-status--in-use'},
-    'used': {'title': 'Использован', 'css': 'domain-status--used'},
-    'glued': {'title': 'В клее', 'css': 'domain-status--glued'},
+    'new': {'title': 'Новый', 'tone': 'accent'},
+    'in_use': {'title': 'Используется', 'tone': 'success'},
+    'used': {'title': 'Использован', 'tone': 'danger'},
+    'glued': {'title': 'В клее', 'tone': 'warning'},
 }
 SORTS = {'created_at': 'Дата добавления', 'status': 'Статус', 'registered_at': 'Дата регистрации'}
 
@@ -125,6 +125,37 @@ def add_domains(scope, text, on_insert=None):
 
 def sorting(sort=None, order=None):
     return (sort if sort in SORTS else 'created_at', order if order in {'asc', 'desc'} else 'desc')
+
+
+def list_filters(rows, q='', status=''):
+    """Чистая фильтрация дерева: предки совпадения остаются контекстом.
+
+    В реестре один домен может иметь несколько статусов разных брендов.
+    Счётчик каждого статуса учитывает домен один раз и не включает предков,
+    добавленных только для читаемости дерева.
+    """
+    q = q.strip()
+    needle = q.casefold()
+    searched = [row for row in rows if any(needle in value.casefold() for value in
+                (row['domain'], row.get('display_domain') or display_domain(row['domain'])))]
+    counts = {'': len(searched), **{key: 0 for key in STATUSES}}
+    matches = set()
+    for row in searched:
+        row_statuses = set(row.get('statuses', (row.get('status'),)))
+        for key in row_statuses & STATUSES.keys():
+            counts[key] += 1
+        if not status or status in row_statuses:
+            matches.add(row['id'])
+    parents = {row['id']: row.get('parent_id') for row in rows}
+    visible = set(matches)
+    for item in matches:
+        parent = parents.get(item)
+        while parent in parents and parent not in visible:
+            visible.add(parent)
+            parent = parents[parent]
+    return dict(domain_rows=[row for row in rows if row['id'] in visible],
+                parent_rows=rows, q=q, status_filter=status, status_counts=counts,
+                total=len(rows), shown=len(visible))
 
 
 def list_tree(scope, sort=None, order=None):

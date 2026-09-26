@@ -1,27 +1,17 @@
-{% extends "auth_base.html" %}
-{% from "_macros.html" import csrf_field %}
-
-{% block steps %}
-  <span class="step step--done">✓</span>
-  <span class="step-line step-line--done"></span>
-  <span class="step step--active">2</span>
-{% endblock %}
-
-{% block auth_title %}Второй фактор{% endblock %}
-{% block auth_hint %}Шаг 2 из 2 — дополнительный пароль{% endblock %}
-
-{% block auth_form %}
-  <form method="post" action="{{ url_for('auth.login2_submit') }}" class="auth-form" autocomplete="off">
-    {{ csrf_field() }}
-    <label class="field">
-      <span class="field__label">Второй пароль</span>
-      <input type="password" name="password" placeholder="Второй пароль" autofocus required autocomplete="one-time-code">
-    </label>
-    <button type="submit" class="btn btn--primary">Войти →</button>
-  </form>
-
-  <form method="post" action="{{ url_for('auth.logout') }}" class="auth-form__back">
-    {{ csrf_field() }}
-    <button type="submit" class="btn-link">← Назад ко входу</button>
-  </form>
+{% extends 'venom_ui/auth.html' %}
+{% set auth_step = 2 %}
+{% block title %}Вход — venom_shadows site{% endblock %}
+{% block auth_content %}
+<h1>Второй фактор</h1>
+<p class="auth__hint">Шаг 2 из 2 — дополнительный пароль</p>
+{% if error %}{{ ui.banner('error', error, closable=false, inline=true) }}{% endif %}
+<form method="post" action="{{ url_for('auth.login2_submit') }}">
+  {{ venom_ui.csrf() }}
+  {{ ui.field('password', 'Второй пароль', type='password', placeholder='Второй пароль', required=true, attrs={'autocomplete': 'one-time-code', 'autofocus': true}) }}
+  {{ ui.btn('Войти', icon='arrow-right') }}
+</form>
+<form method="post" action="{{ url_for('auth.logout') }}">
+  {{ venom_ui.csrf() }}
+  {{ ui.btn('Назад ко входу', 'secondary') }}
+</form>
 {% endblock %}
