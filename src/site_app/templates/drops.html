@@ -4,8 +4,10 @@
 {% block scripts %}{% include '_site_scripts.html' %}{% endblock %}
 {% block content %}
 <div class="page">
+<section class="panel">
   {{ ui.page_header('Дропы — ' ~ filter_title) }}
   {% if brands_error %}{{ ui.banner('error', brands_error) }}{% endif %}
   {% if drop_context %}{% include '_domains.html' %}{% else %}{% include '_drops_registry.html' %}{% endif %}
+</section>
 </div>
 {% endblock %}

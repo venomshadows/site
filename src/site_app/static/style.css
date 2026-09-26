@@ -18,3 +18,17 @@
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
+
+.sidebar__body a {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--layout-gap) / 2);
+}
+
+.brand-frequency {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

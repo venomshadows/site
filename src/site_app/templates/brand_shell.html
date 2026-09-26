@@ -5,7 +5,7 @@
   {% if brands_error %}{{ ui.banner('error', brands_error) }}{% endif %}
   <nav aria-label="Бренды"><ul>
   {% for b in brands %}
-    <li><a href="{{ url_for('brands.brand_tab', brand_id=b.id, tab=default_tab) }}"{% if brand and b.id == brand.id %} aria-current="page"{% endif %}>{{ b.name }}{% if b.get('query_frequency_total') is not none %} <span title="Суммарная частота запросов бренда">({{ b.query_frequency_total }})</span>{% endif %}</a></li>
+    <li><a href="{{ url_for('brands.brand_tab', brand_id=b.id, tab=default_tab) }}"{% if brand and b.id == brand.id %} aria-current="page"{% endif %}><span class="brand-name">{{ b.name }}</span>{% if b.get('query_frequency_total') is not none %} <span class="brand-frequency" title="Суммарная частота запросов бренда">({{ b.query_frequency_total }})</span>{% endif %}</a></li>
   {% else %}
     {% if not brands_error %}<li>Бренды подтягиваются с Brand — там пока ничего не добавлено.</li>{% endif %}
   {% endfor %}
@@ -20,4 +20,4 @@
     {{ ui.subnav(items, active_tab) }}
   {% endif %}
 {% endblock %}
-{% block content %}<div class="page">{% block tab_content %}{% endblock %}</div>{% endblock %}
+{% block content %}<div class="page"><section class="panel">{% block tab_content %}{% endblock %}</section></div>{% endblock %}
